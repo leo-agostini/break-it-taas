@@ -1,0 +1,23 @@
+{
+  "name": "break-it-taas",
+  "private": true,
+  "packageManager": "npm@11.12.1",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.15.3",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.3"
+  },
+  "type": "module"
+}
