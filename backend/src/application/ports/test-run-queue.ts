@@ -1,4 +1,6 @@
+import { TestRun } from "@/domain/entities/test-run";
+
 export interface TestRunQueue {
-  publish(runId: string): Promise<void>;
+  publish(run: TestRun): Promise<void>;
   acknowledge(runId: string): Promise<void>;
 }

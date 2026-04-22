@@ -1,15 +1,15 @@
-enum CheckKind {
-  STATUS_CODE = 'STATUS_CODE',
-  RESPONSE_TIME_LT = 'RESPONSE_TIME_LT',
-  BODY_CONTAINS = 'BODY_CONTAINS',
-  JSON_PATH_EQUALS = 'JSON_PATH_EQUALS',
+export enum CheckKind {
+  STATUS_CODE = "STATUS_CODE",
+  RESPONSE_TIME_LT = "RESPONSE_TIME_LT",
+  BODY_CONTAINS = "BODY_CONTAINS",
+  JSON_PATH_EQUALS = "JSON_PATH_EQUALS",
 }
 
-enum HttpMethod {
-  GET = 'GET',
-  POST = 'POST',
-  PUT = 'PUT',
-  DELETE = 'DELETE',
+export enum HttpMethod {
+  GET = "GET",
+  POST = "POST",
+  PUT = "PUT",
+  DELETE = "DELETE",
 }
 
 export type StepCheck =
