@@ -1,14 +1,14 @@
-import { randomUUIDv7 } from "bun";
+import { randomUUIDv7 } from 'bun';
 
 import type {
   OutboxEventMap,
   OutboxEventEnum,
-} from "@/domain/events/outbox-event-map";
+} from '@/domain/events/outbox-event-map';
 
 export enum OutboxEventStatus {
-  PENDING = "PENDING",
-  PUBLISHED = "PUBLISHED",
-  FAILED = "FAILED",
+  PENDING = 'PENDING',
+  PUBLISHED = 'PUBLISHED',
+  FAILED = 'FAILED',
 }
 
 interface OutboxEventConstructorArgs {

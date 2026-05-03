@@ -1,4 +1,4 @@
-import type { TransactionContext } from "../ports/unit-of-work";
+import type { TransactionContext } from "@/application/ports/unit-of-work";
 import type { OutboxEvent } from "@/domain/entities/outbox-event";
 
 export interface OutboxRepository {

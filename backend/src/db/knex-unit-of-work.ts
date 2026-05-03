@@ -1,6 +1,9 @@
-import type { Knex } from "knex";
-import { db } from "./knex";
-import type { TransactionContext, UnitOfWork } from "@/application/ports/unit-of-work";
+import type { Knex } from 'knex';
+import { db } from './knex';
+import type {
+  TransactionContext,
+  UnitOfWork,
+} from '@/application/ports/unit-of-work';
 
 export class KnexUnitOfWork implements UnitOfWork {
   async transaction<T>(

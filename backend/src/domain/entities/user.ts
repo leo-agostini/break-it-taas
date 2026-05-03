@@ -1,9 +1,10 @@
-import { randomUUIDv7 } from "bun";
+import { randomUUIDv7 } from 'bun';
+import { ValidationError } from '@/domain/errors/custom-errors';
 
 export enum UserRole {
-  OWNER = "OWNER",
-  ADMIN = "ADMIN",
-  MEMBER = "MEMBER",
+  OWNER = 'OWNER',
+  ADMIN = 'ADMIN',
+  MEMBER = 'MEMBER',
 }
 
 interface UserConstructorArgs {
@@ -26,9 +27,11 @@ export class User {
   createdAt: Date;
 
   constructor(args: UserConstructorArgs) {
-    if (!args.name.trim()) throw new Error("User name is required");
-    if (!args.email.trim()) throw new Error("User email is required");
-    if (!args.passwordHash.trim()) throw new Error("Password hash is required");
+    if (!args.name.trim()) throw new ValidationError('User name is required');
+    if (!args.email.trim()) throw new ValidationError('User email is required');
+    if (!args.passwordHash.trim()) {
+      throw new ValidationError('Password hash is required');
+    }
 
     this.id = args.id;
     this.name = args.name.trim();

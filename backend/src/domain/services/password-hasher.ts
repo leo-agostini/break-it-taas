@@ -1,5 +1,6 @@
-import argon2 from "argon2";
-import { randomBytes } from "node:crypto";
+import argon2 from 'argon2';
+import { randomBytes } from 'node:crypto';
+import { ValidationError } from '@/domain/errors/custom-errors';
 
 const ARGON2_OPTIONS: argon2.Options & { raw?: false } = {
   type: argon2.argon2id,
@@ -10,7 +11,7 @@ const ARGON2_OPTIONS: argon2.Options & { raw?: false } = {
 };
 
 export async function hashPassword(rawPassword: string): Promise<string> {
-  if (!rawPassword) throw new Error("Password is required");
+  if (!rawPassword) throw new ValidationError('Password is required');
 
   const salt = randomBytes(16);
   return argon2.hash(rawPassword, {

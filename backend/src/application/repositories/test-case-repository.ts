@@ -1,5 +1,5 @@
-import type { TestCase } from '../../domain/entities/test-case';
-import type { TransactionContext } from '../ports/unit-of-work';
+import type { TestCase } from '@/domain/entities/test-case';
+import type { TransactionContext } from '@/application/ports/unit-of-work';
 
 export interface TestCaseRepository {
   find(id: string): Promise<TestCase | null>;

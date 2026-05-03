@@ -1,4 +1,4 @@
-import { OutboxEventEnum, type OutboxEventMap } from "./outbox-event-map";
+import { OutboxEventEnum, type OutboxEventMap } from './outbox-event-map';
 
 type TestRunRequestedPayload =
   OutboxEventMap[typeof OutboxEventEnum.TEST_RUN_REQUESTED];
@@ -15,6 +15,6 @@ export const TestRunEvents = {
   isRequestedPayload(
     payload: Record<string, unknown>,
   ): payload is TestRunRequestedPayload {
-    return typeof payload.testRunId === "string";
+    return typeof payload.testRunId === 'string';
   },
 };

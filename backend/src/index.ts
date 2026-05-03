@@ -2,12 +2,24 @@ import jwt from "jsonwebtoken";
 import { redisClient } from "./cache/redis";
 import { env } from "./config/env";
 import { db } from "./db/knex";
+import { mapErrorToHttp } from '@/application/errors/http-error-mapper';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type,Authorization",
 };
+
+function errorResponse(error: unknown): Response {
+  const mapped = mapErrorToHttp(error);
+  return Response.json(
+    mapped.body,
+    {
+      status: mapped.status,
+      headers: corsHeaders,
+    },
+  );
+}
 
 try {
   await redisClient.connect();
@@ -18,87 +30,91 @@ try {
 const server = Bun.serve({
   port: env.PORT,
   async fetch(request) {
-    const url = new URL(request.url);
+    try {
+      const url = new URL(request.url);
 
-    if (request.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders,
-      });
-    }
-
-    if (url.pathname === "/api/health" && request.method === "GET") {
-      let postgres = "down";
-      let redis = "down";
-
-      try {
-        await db.raw("select 1");
-        postgres = "up";
-      } catch (error) {
-        console.error("Postgres check failed", error);
+      if (request.method === "OPTIONS") {
+        return new Response(null, {
+          status: 204,
+          headers: corsHeaders,
+        });
       }
 
-      try {
-        if (!redisClient.isOpen) {
-          await redisClient.connect();
+      if (url.pathname === "/api/health" && request.method === "GET") {
+        let postgres = "down";
+        let redis = "down";
+
+        try {
+          await db.raw("select 1");
+          postgres = "up";
+        } catch (error) {
+          console.error("Postgres check failed", error);
         }
-        await redisClient.ping();
-        redis = "up";
-      } catch (error) {
-        console.error("Redis check failed", error);
+
+        try {
+          if (!redisClient.isOpen) {
+            await redisClient.connect();
+          }
+          await redisClient.ping();
+          redis = "up";
+        } catch (error) {
+          console.error("Redis check failed", error);
+        }
+
+        const allHealthy = postgres === "up" && redis === "up";
+
+        return Response.json(
+          {
+            status: allHealthy ? "ok" : "degraded",
+            services: {
+              postgres,
+              redis,
+            },
+          },
+          {
+            status: allHealthy ? 200 : 503,
+            headers: corsHeaders,
+          },
+        );
       }
 
-      const allHealthy = postgres === "up" && redis === "up";
+      if (url.pathname === "/api/token" && request.method === "POST") {
+        const body = (await request.json().catch(() => ({}))) as {
+          subject?: string;
+        };
 
-      return Response.json(
-        {
-          status: allHealthy ? "ok" : "degraded",
-          services: {
-            postgres,
-            redis,
+        const token = jwt.sign(
+          {
+            sub: body.subject ?? "demo-user",
           },
-        },
-        {
-          status: allHealthy ? 200 : 503,
-          headers: corsHeaders,
-        },
-      );
-    }
+          env.JWT_SECRET,
+          {
+            expiresIn: "1h",
+          },
+        );
 
-    if (url.pathname === "/api/token" && request.method === "POST") {
-      const body = (await request.json().catch(() => ({}))) as {
-        subject?: string;
-      };
-
-      const token = jwt.sign(
-        {
-          sub: body.subject ?? "demo-user",
-        },
-        env.JWT_SECRET,
-        {
-          expiresIn: "1h",
-        },
-      );
+        return Response.json(
+          {
+            token,
+          },
+          {
+            headers: corsHeaders,
+          },
+        );
+      }
 
       return Response.json(
         {
-          token,
+          status: "not_found",
         },
         {
+          status: 404,
           headers: corsHeaders,
         },
       );
+    } catch (error) {
+      return errorResponse(error);
     }
-
-    return Response.json(
-      {
-        status: "not_found",
-      },
-      {
-        status: 404,
-        headers: corsHeaders,
-      },
-    );
   },
 });
 

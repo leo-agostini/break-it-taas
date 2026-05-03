@@ -1,5 +1,5 @@
 export enum OutboxEventEnum {
-  TEST_RUN_REQUESTED = "test-run.requested",
+  TEST_RUN_REQUESTED = 'test-run.requested',
 }
 
 export interface OutboxEventMap {

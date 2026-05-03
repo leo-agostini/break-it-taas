@@ -1,4 +1,5 @@
-import { randomUUIDv7 } from "bun";
+import { randomUUIDv7 } from 'bun';
+import { ValidationError } from '@/domain/errors/custom-errors';
 
 interface OrganizationConstructorArgs {
   id: UUID;
@@ -14,7 +15,9 @@ export class Organization {
   createdAt: Date;
 
   constructor(args: OrganizationConstructorArgs) {
-    if (!args.name.trim()) throw new Error("Organization name is required");
+    if (!args.name.trim()) {
+      throw new ValidationError('Organization name is required');
+    }
 
     this.id = args.id;
     this.ownerId = args.ownerId;

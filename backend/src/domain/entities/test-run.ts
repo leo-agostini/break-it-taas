@@ -1,11 +1,21 @@
 import { randomUUIDv7 } from 'bun';
+import { InvariantViolationError } from '@/domain/errors/custom-errors';
 
 export enum TestRunStatus {
   CREATED = 'CREATED',
+  QUEUED = 'QUEUED',
   RUNNING = 'RUNNING',
   SUCCEEDED = 'SUCCEEDED',
   FAILED = 'FAILED',
+  TIMEOUT = 'TIMEOUT',
+  CANCELLED = 'CANCELLED',
 }
+
+type CompletetionStatus =
+  | TestRunStatus.SUCCEEDED
+  | TestRunStatus.FAILED
+  | TestRunStatus.TIMEOUT
+  | TestRunStatus.CANCELLED;
 
 interface TestRunConstructorArgs {
   id: string;
@@ -14,6 +24,9 @@ interface TestRunConstructorArgs {
   status: TestRunStatus;
   startedAt?: Date;
   completedAt?: Date;
+  runtimeRef?: string;
+  resultSummary?: Record<string, unknown>;
+  artifacts?: string[];
 }
 
 export class TestRun {
@@ -23,6 +36,9 @@ export class TestRun {
   status: TestRunStatus;
   startedAt?: Date;
   completedAt?: Date;
+  runtimeRef?: string;
+  resultSummary?: Record<string, unknown>;
+  artifacts?: string[];
 
   constructor(args: TestRunConstructorArgs) {
     this.id = args.id;
@@ -31,11 +47,14 @@ export class TestRun {
     this.status = args.status;
     this.startedAt = args.startedAt;
     this.completedAt = args.completedAt;
+    this.runtimeRef = args.runtimeRef;
+    this.resultSummary = args.resultSummary;
+    this.artifacts = args.artifacts;
   }
 
-  private complete(newStatus: TestRunStatus.SUCCEEDED | TestRunStatus.FAILED) {
+  private complete(newStatus: CompletetionStatus) {
     if (this.status !== TestRunStatus.RUNNING) {
-      throw new Error('Can not complete a not running test');
+      throw new InvariantViolationError('Can not complete a not running test');
     }
 
     this.status = newStatus;
@@ -43,8 +62,13 @@ export class TestRun {
   }
 
   public start() {
-    if (this.status !== TestRunStatus.CREATED) {
-      throw new Error('Only runs with CREATED status can be started');
+    if (
+      this.status !== TestRunStatus.CREATED &&
+      this.status !== TestRunStatus.QUEUED
+    ) {
+      throw new InvariantViolationError(
+        'Only runs with CREATED or QUEUED status can be started',
+      );
     }
     this.startedAt = new Date();
     this.status = TestRunStatus.RUNNING;
@@ -56,6 +80,23 @@ export class TestRun {
 
   public failed() {
     this.complete(TestRunStatus.FAILED);
+  }
+
+  public queue() {
+    if (this.status !== TestRunStatus.CREATED) {
+      throw new InvariantViolationError(
+        'Only runs with CREATED status can be queued',
+      );
+    }
+    this.status = TestRunStatus.QUEUED;
+  }
+
+  public timeout() {
+    this.complete(TestRunStatus.TIMEOUT);
+  }
+
+  public cancel() {
+    this.complete(TestRunStatus.CANCELLED);
   }
 
   static create(args: { testCaseId: string }) {
