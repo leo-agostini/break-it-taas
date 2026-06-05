@@ -75,3 +75,41 @@ export class OutboxEventPayloadError extends ValidationError {
     );
   }
 }
+
+export class EmailAlreadyRegisteredError extends InvariantViolationError {
+  constructor() {
+    super(
+      'Email is already registered',
+      'A user account already exists for the provided email address.',
+      'Sign in with this email or use a different address.',
+    );
+  }
+}
+
+export class AuthorizationError extends BaseError {
+  constructor(
+    message = 'You do not have permission to access this resource',
+    description = 'The current user is not allowed to perform this operation for this tenant resource.',
+    help = 'Use a resource owned by your user or organization, or request access.',
+  ) {
+    super(message, {
+      code: 'AUTHORIZATION_ERROR',
+      description,
+      help,
+    });
+  }
+}
+
+export class AuthenticationError extends BaseError {
+  constructor(
+    message = 'Authentication is required to access this resource',
+    description = 'The request is missing valid authentication credentials.',
+    help = 'Provide a valid Bearer token in the Authorization header.',
+  ) {
+    super(message, {
+      code: 'AUTHENTICATION_ERROR',
+      description,
+      help,
+    });
+  }
+}

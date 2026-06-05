@@ -7,6 +7,7 @@ Esta pasta organiza a base documental do trabalho final:
 - `02-architecture/` — fronteiras e visão arquitetural
 - `03-decisions/` — ADRs e tradeoffs
 - `04-quality/` — rastreabilidade e qualidade
+- `05-operations/` — operacao local e ambiente K3D/Rancher
 
 Arquivo-base de requisitos fornecido pelo autor: `01-product/requirements-catalog.md`.
 

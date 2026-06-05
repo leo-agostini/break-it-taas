@@ -1,133 +1,92 @@
-import jwt from "jsonwebtoken";
-import { redisClient } from "./cache/redis";
-import { env } from "./config/env";
-import { db } from "./db/knex";
+import { Elysia } from 'elysia';
+import { swagger } from '@elysiajs/swagger';
 import { mapErrorToHttp } from '@/application/errors/http-error-mapper';
+import { db } from '@/infra/db/knex';
+import { env } from '@/infra/config/env';
+import { createContainer } from '@/infra/http/container';
+import { createInternalRoutes } from '@/infra/http/routes/internal-routes';
+import { createProtectedRoutes } from '@/infra/http/routes/protected-routes';
+import { createPublicRoutes } from '@/infra/http/routes/public-routes';
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type,Authorization",
-};
+const container = createContainer();
 
-function errorResponse(error: unknown): Response {
-  const mapped = mapErrorToHttp(error);
-  return Response.json(
-    mapped.body,
-    {
-      status: mapped.status,
-      headers: corsHeaders,
-    },
-  );
-}
-
-try {
-  await redisClient.connect();
-} catch (error) {
-  console.error("Redis connection failed", error);
-}
-
-const server = Bun.serve({
-  port: env.PORT,
-  async fetch(request) {
-    try {
-      const url = new URL(request.url);
-
-      if (request.method === "OPTIONS") {
-        return new Response(null, {
-          status: 204,
-          headers: corsHeaders,
-        });
-      }
-
-      if (url.pathname === "/api/health" && request.method === "GET") {
-        let postgres = "down";
-        let redis = "down";
-
-        try {
-          await db.raw("select 1");
-          postgres = "up";
-        } catch (error) {
-          console.error("Postgres check failed", error);
-        }
-
-        try {
-          if (!redisClient.isOpen) {
-            await redisClient.connect();
-          }
-          await redisClient.ping();
-          redis = "up";
-        } catch (error) {
-          console.error("Redis check failed", error);
-        }
-
-        const allHealthy = postgres === "up" && redis === "up";
-
-        return Response.json(
-          {
-            status: allHealthy ? "ok" : "degraded",
-            services: {
-              postgres,
-              redis,
+const app = new Elysia()
+  .use(
+    swagger({
+      path: '/docs',
+      documentation: {
+        info: {
+          title: 'Break It TaaS API',
+          version: '1.0.0',
+          description: 'API for test case and test run orchestration',
+        },
+        tags: [
+          { name: 'health', description: 'Service and dependency health' },
+          { name: 'auth', description: 'Authentication and user access' },
+          { name: 'test-cases', description: 'Test case management' },
+          { name: 'test-runs', description: 'Test run execution' },
+        ],
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: 'http',
+              scheme: 'bearer',
+              bearerFormat: 'JWT',
             },
           },
-          {
-            status: allHealthy ? 200 : 503,
-            headers: corsHeaders,
-          },
-        );
-      }
-
-      if (url.pathname === "/api/token" && request.method === "POST") {
-        const body = (await request.json().catch(() => ({}))) as {
-          subject?: string;
-        };
-
-        const token = jwt.sign(
-          {
-            sub: body.subject ?? "demo-user",
-          },
-          env.JWT_SECRET,
-          {
-            expiresIn: "1h",
-          },
-        );
-
-        return Response.json(
-          {
-            token,
-          },
-          {
-            headers: corsHeaders,
-          },
-        );
-      }
-
-      return Response.json(
-        {
-          status: "not_found",
         },
-        {
-          status: 404,
-          headers: corsHeaders,
-        },
-      );
-    } catch (error) {
-      return errorResponse(error);
-    }
-  },
-});
+      },
+    }),
+  )
+  .options('*', ({ set, request }) => {
+    const requestOrigin = request.headers.get('origin');
+    const allowOrigin = env.CORS_ORIGIN === '*' && requestOrigin
+      ? requestOrigin
+      : env.CORS_ORIGIN;
 
-console.info(`Backend listening on http://${server.hostname}:${server.port}`);
+    set.headers['Access-Control-Allow-Origin'] = allowOrigin;
+    set.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS';
+    set.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Cookie';
+    set.headers['Access-Control-Allow-Credentials'] = 'true';
+    set.headers.Vary = 'Origin';
+    set.status = 204;
+    return null;
+  })
+  .onAfterHandle(({ set, request }) => {
+    const requestOrigin = request.headers.get('origin');
+    const allowOrigin = env.CORS_ORIGIN === '*' && requestOrigin
+      ? requestOrigin
+      : env.CORS_ORIGIN;
+
+    set.headers['Access-Control-Allow-Origin'] = allowOrigin;
+    set.headers.Vary = 'Origin';
+    set.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS';
+    set.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Cookie';
+    set.headers['Access-Control-Allow-Credentials'] = 'true';
+  })
+  .onError(({ error, set }) => {
+    console.error('Request failed', error);
+    const mapped = mapErrorToHttp(error);
+    set.status = mapped.status;
+    return mapped.body;
+  })
+  .use(createPublicRoutes(container))
+  .use(createProtectedRoutes(container))
+  .use(createInternalRoutes(container))
+  .all('*', ({ set }) => {
+    set.status = 404;
+    return { status: 'not_found' };
+  });
+
+app.listen(env.PORT);
+
+console.info(`Backend listening on http://0.0.0.0:${env.PORT}`);
 
 const shutdown = async () => {
-  server.stop();
-  if (redisClient.isOpen) {
-    await redisClient.quit();
-  }
+  app.stop();
   await db.destroy();
   process.exit(0);
 };
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);

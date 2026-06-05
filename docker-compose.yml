@@ -1,67 +1,79 @@
 services:
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: breakit-frontend
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=production
-      - VITE_API_URL=http://localhost:3001
-    depends_on:
-      backend:
-        condition: service_started
+    # frontend:
+    #   build:
+    #     context: ./frontend
+    #     dockerfile: Dockerfile
+    #   container_name: breakit-frontend
+    #   ports:
+    #     - "3000:3000"
+    #   environment:
+    #     - NODE_ENV=production
+    #     - VITE_API_URL=http://localhost:3001
+    #   depends_on:
+    #     backend:
+    #       condition: service_started
 
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: breakit-backend
-    ports:
-      - "3001:3001"
-    environment:
-      - NODE_ENV=production
-      - PORT=3001
-      - JWT_SECRET=change-me-in-production
-      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/app
-      - REDIS_URL=redis://redis:6379
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    backend:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+        container_name: breakit-backend
+        ports:
+            - "3001:3001"
+        environment:
+            - NODE_ENV=production
+            - PORT=3001
+            - JWT_SECRET=change-me-in-production
+            - K3S_QUEUE_ENDPOINT=http://k3s-queue:8080/enqueue
+            - DATABASE_URL=postgres://postgres:postgres@postgres:5432/app
+        depends_on:
+            migrate:
+                condition: service_completed_successfully
 
-  postgres:
-    image: postgres:16-alpine
-    container_name: breakit-postgres
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=app
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+    outbox-worker:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+        container_name: breakit-outbox-worker
+        environment:
+            - NODE_ENV=production
+            - JWT_SECRET=change-me-in-production
+            - K3S_QUEUE_ENDPOINT=http://k3s-queue:8080/enqueue
+            - DATABASE_URL=postgres://postgres:postgres@postgres:5432/app
+        command: ["bun", "run", "src/worker.ts"]
+        depends_on:
+            migrate:
+                condition: service_completed_successfully
 
-  redis:
-    image: redis:7-alpine
-    container_name: breakit-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+    migrate:
+        build:
+            context: ./backend
+            dockerfile: Dockerfile
+        container_name: breakit-migrate
+        environment:
+            - NODE_ENV=production
+            - DATABASE_URL=postgres://postgres:postgres@postgres:5432/app
+        command: ["bun", "run", "migrate:latest"]
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+    postgres:
+        image: postgres:16-alpine
+        container_name: breakit-postgres
+        environment:
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=postgres
+            - POSTGRES_DB=app
+        ports:
+            - "5432:5432"
+        volumes:
+            - postgres-data:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
 
 volumes:
-  postgres-data:
-  redis-data:
+    postgres-data:

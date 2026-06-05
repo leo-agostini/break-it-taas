@@ -1,6 +1,8 @@
 import type { TestRunQueue } from '@/application/ports/test-run-queue';
 import type { OutboxRepository } from '@/application/repositories/outbox-repository';
+import type { TestCaseRepository } from '@/application/repositories/test-case-repository';
 import type { TestRunRepository } from '@/application/repositories/test-run-repository';
+import { OutboxEventStatus } from '@/domain/entities/outbox-event';
 import { OutboxEventEnum } from '@/domain/events/outbox-event-map';
 import { TestRunEvents } from '@/domain/events/test-run-events';
 import {
@@ -8,9 +10,13 @@ import {
   OutboxEventPayloadError,
 } from '@/domain/errors/custom-errors';
 
+// TODO: Refactor this class.
 export class OutboxDispatcherWorker {
+  private readonly maxAttempts = 8;
+
   constructor(
     private outboxRepository: OutboxRepository,
+    private testCaseRepository: TestCaseRepository,
     private testRunRepository: TestRunRepository,
     private testRunQueue: TestRunQueue,
   ) {}
@@ -21,7 +27,12 @@ export class OutboxDispatcherWorker {
     for (const event of events) {
       try {
         if (event.type !== OutboxEventEnum.TEST_RUN_REQUESTED) {
-          await this.outboxRepository.markPublished(event.id);
+          event.markFailed(`Unsupported outbox event type: ${event.type}`);
+          await this.outboxRepository.markFailed(
+            event.id,
+            event.lastError ?? 'Unsupported outbox event type',
+            event.attempts - 1,
+          );
           continue;
         }
 
@@ -38,12 +49,36 @@ export class OutboxDispatcherWorker {
           throw new NotFoundError(`Test run ${testRunId} not found`);
         }
 
-        await this.testRunQueue.publish(testRun);
+        const testCase = await this.testCaseRepository.find(testRun.testCaseId);
+        if (!testCase) {
+          throw new NotFoundError(`Test case ${testRun.testCaseId} not found`);
+        }
+
+        const { runtimeRef } = await this.testRunQueue.publish(testRun, testCase);
+        testRun.runtimeRef = runtimeRef;
+        testRun.start();
+        await this.testRunRepository.save(testRun);
         await this.outboxRepository.markPublished(event.id);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unexpected outbox error';
-        await this.outboxRepository.markFailed(event.id, message);
+        event.registerDispatchFailure(message, this.maxAttempts);
+
+        if (event.status === OutboxEventStatus.FAILED) {
+          await this.outboxRepository.markFailed(
+            event.id,
+            event.lastError ?? message,
+            event.attempts - 1,
+          );
+          continue;
+        }
+
+        await this.outboxRepository.markRetry(
+          event.id,
+          event.lastError ?? message,
+          event.nextAttemptAt ?? new Date(),
+          event.attempts - 1,
+        );
       }
     }
   }

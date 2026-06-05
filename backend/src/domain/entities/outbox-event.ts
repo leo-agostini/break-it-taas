@@ -7,6 +7,7 @@ import type {
 
 export enum OutboxEventStatus {
   PENDING = 'PENDING',
+  PROCESSING = 'PROCESSING',
   PUBLISHED = 'PUBLISHED',
   FAILED = 'FAILED',
 }
@@ -19,6 +20,8 @@ interface OutboxEventConstructorArgs {
   status: OutboxEventStatus;
   attempts: number;
   createdAt: Date;
+  nextAttemptAt?: Date;
+  processingStartedAt?: Date;
   publishedAt?: Date;
   lastError?: string;
 }
@@ -31,6 +34,8 @@ export class OutboxEvent {
   status: OutboxEventStatus;
   attempts: number;
   createdAt: Date;
+  nextAttemptAt?: Date;
+  processingStartedAt?: Date;
   publishedAt?: Date;
   lastError?: string;
 
@@ -42,20 +47,44 @@ export class OutboxEvent {
     this.status = args.status;
     this.attempts = args.attempts;
     this.createdAt = args.createdAt;
+    this.nextAttemptAt = args.nextAttemptAt;
+    this.processingStartedAt = args.processingStartedAt;
     this.publishedAt = args.publishedAt;
     this.lastError = args.lastError;
   }
 
-  markPublished() {
-    this.status = OutboxEventStatus.PUBLISHED;
-    this.publishedAt = new Date();
-    this.lastError = undefined;
+  markProcessing() {
+    this.status = OutboxEventStatus.PROCESSING;
+    this.processingStartedAt = new Date();
   }
 
   markFailed(errorMessage: string) {
     this.status = OutboxEventStatus.FAILED;
     this.attempts += 1;
+    this.processingStartedAt = undefined;
+    this.nextAttemptAt = undefined;
     this.lastError = errorMessage;
+  }
+
+  registerDispatchFailure(
+    errorMessage: string,
+    maxAttempts: number,
+    now = new Date(),
+  ) {
+    this.attempts += 1;
+    this.lastError = errorMessage;
+    this.processingStartedAt = undefined;
+
+    if (this.attempts >= maxAttempts) {
+      this.status = OutboxEventStatus.FAILED;
+      this.nextAttemptAt = undefined;
+      return;
+    }
+
+    const backoffSeconds = Math.min(2 ** this.attempts * 5, 300);
+
+    this.status = OutboxEventStatus.PENDING;
+    this.nextAttemptAt = new Date(now.getTime() + backoffSeconds * 1000);
   }
 
   static create(args: {
@@ -83,6 +112,7 @@ export class OutboxEvent {
       status: OutboxEventStatus.PENDING,
       attempts: 0,
       createdAt: new Date(),
+      nextAttemptAt: new Date(),
     });
   }
 }

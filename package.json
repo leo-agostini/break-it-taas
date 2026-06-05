@@ -2,12 +2,10 @@
   "name": "break-it-taas",
   "private": true,
   "packageManager": "npm@11.12.1",
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
+  "workspaces": ["frontend", "backend"],
   "scripts": {
     "dev": "turbo run dev --parallel",
+    "dev-frontend": "turbo run dev --filter frontend",
     "build": "turbo run build",
     "lint": "turbo run lint",
     "format": "turbo run format",
@@ -25,7 +23,5 @@
     "typescript": "^5.8.3"
   },
   "type": "module",
-  "dependencies": {
-    "zod": "^4.3.6"
-  }
+  "dependencies": {}
 }

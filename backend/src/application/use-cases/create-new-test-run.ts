@@ -5,7 +5,8 @@ import { TestRunEvents } from '@/domain/events/test-run-events';
 import type { OutboxRepository } from '@/application/repositories/outbox-repository';
 import type { TestRunRepository } from '@/application/repositories/test-run-repository';
 import { TestRun } from '@/domain/entities/test-run';
-import { NotFoundError } from '@/domain/errors/custom-errors';
+import { AuthorizationError, NotFoundError } from '@/domain/errors/custom-errors';
+import type { ActorContext } from '@/application/ports/actor-context';
 
 export class CreateNewTestRunUseCase {
   constructor(
@@ -15,9 +16,21 @@ export class CreateNewTestRunUseCase {
     private outboxRepository: OutboxRepository,
   ) {}
 
-  async execute(testCaseId: UUID): Promise<TestRun> {
+  async execute(testCaseId: UUID, actor: ActorContext): Promise<TestRun> {
     const testCase = await this.testCaseRepository.find(testCaseId);
-    if (!testCase) throw new NotFoundError('Test case not found');
+    if (!testCase) {
+      throw new NotFoundError('Test case not found');
+    }
+
+    const ownedTestCase = await this.testCaseRepository.findOwnedByActor({
+      testCaseId,
+      actorUserId: actor.userId,
+      actorOrgId: actor.orgId,
+    });
+
+    if (!ownedTestCase) {
+      throw new AuthorizationError();
+    }
 
     const testRun = await this.unitOfWork.transaction(async (tx) => {
       const run = TestRun.create({ testCaseId });

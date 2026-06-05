@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-restore-check
+  namespace: data
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: restore-check
+          image: postgres:16
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PGHOST
+              value: postgres.data.svc.cluster.local
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-auth
+                  key: POSTGRES_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-auth
+                  key: POSTGRES_PASSWORD
+            - name: SOURCE_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-auth
+                  key: POSTGRES_DB
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              latest=$(ls -1t /backups/*.sql.gz | head -n1)
+              testdb="${SOURCE_DB}_restore_validation"
+              [ -n "$latest" ]
+              psql -h "$PGHOST" -U "$PGUSER" -d postgres -v ON_ERROR_STOP=1 -c "DROP DATABASE IF EXISTS \"$testdb\";"
+              psql -h "$PGHOST" -U "$PGUSER" -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE \"$testdb\";"
+              gzip -dc "$latest" | psql -h "$PGHOST" -U "$PGUSER" -d "$testdb" -v ON_ERROR_STOP=1
+              psql -h "$PGHOST" -U "$PGUSER" -d "$testdb" -v ON_ERROR_STOP=1 -c "SELECT NOW();"
+              echo "restore validation succeeded from $latest"
+          volumeMounts:
+            - name: backups
+              mountPath: /backups
+      volumes:
+        - name: backups
+          persistentVolumeClaim:
+            claimName: postgres-backups

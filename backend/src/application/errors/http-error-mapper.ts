@@ -16,8 +16,10 @@ interface MappedHttpError {
 
 const statusByCode: Record<string, number> = {
   NOT_FOUND: 404,
+  AUTHENTICATION_ERROR: 401,
   VALIDATION_ERROR: 422,
   INVARIANT_VIOLATION: 409,
+  AUTHORIZATION_ERROR: 403,
   CONFIGURATION_ERROR: 500,
 };
 

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: app
+data:
+  K3S_QUEUE_ENDPOINT: http://unused.local
+  RUNNER_CALLBACK_BASE_URL: http://backend.app.svc.cluster.local
+  RUNNER_IMAGE: breakit-k6-runner:local
+  K3S_NAMESPACE: app

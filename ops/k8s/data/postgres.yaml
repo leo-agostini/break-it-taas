@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: Service
+metadata:
+    name: postgres
+    namespace: data
+spec:
+    ports:
+        - name: postgres
+          port: 5432
+          targetPort: 5432
+    selector:
+        app: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+    name: postgres
+    namespace: data
+spec:
+    serviceName: postgres
+    replicas: 1
+    selector:
+        matchLabels:
+            app: postgres
+    template:
+        metadata:
+            labels:
+                app: postgres
+        spec:
+            terminationGracePeriodSeconds: 30
+            containers:
+                - name: postgres
+                  image: postgres:16
+                  imagePullPolicy: IfNotPresent
+                  ports:
+                      - containerPort: 5432
+                        name: postgres
+                  envFrom:
+                      - secretRef:
+                            name: postgres-auth
+                  resources:
+                      requests:
+                          cpu: 200m
+                          memory: 256Mi
+                      limits:
+                          cpu: 1000m
+                          memory: 1Gi
+                  readinessProbe:
+                      exec:
+                          command:
+                              - /bin/sh
+                              - -ec
+                              - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+                      initialDelaySeconds: 10
+                      periodSeconds: 10
+                  livenessProbe:
+                      exec:
+                          command:
+                              - /bin/sh
+                              - -ec
+                              - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+                      initialDelaySeconds: 20
+                      periodSeconds: 10
+                  volumeMounts:
+                      - mountPath: /var/lib/postgresql/data
+                        name: postgres-data
+    volumeClaimTemplates:
+        - metadata:
+              name: postgres-data
+          spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                  requests:
+                      storage: 10Gi

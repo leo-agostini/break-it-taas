@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: outbox-worker
+  namespace: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: outbox-worker
+  template:
+    metadata:
+      labels:
+        app: outbox-worker
+    spec:
+      serviceAccountName: outbox-worker
+      containers:
+        - name: outbox-worker
+          image: breakit-backend:local
+          imagePullPolicy: IfNotPresent
+          command:
+            - bun
+            - run
+            - src/worker.ts
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-env
+                  key: JWT_SECRET
+            - name: K3S_QUEUE_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: K3S_QUEUE_ENDPOINT
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-env
+                  key: DATABASE_URL
+            - name: RUNNER_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-env
+                  key: RUNNER_SHARED_SECRET
+            - name: RUNNER_CALLBACK_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RUNNER_CALLBACK_BASE_URL
+            - name: RUNNER_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RUNNER_IMAGE
+            - name: K3S_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: K3S_NAMESPACE

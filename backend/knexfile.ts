@@ -7,7 +7,7 @@ const config: Record<string, Knex.Config> = {
       process.env.DATABASE_URL ??
       "postgres://postgres:postgres@localhost:5432/app",
     migrations: {
-      directory: "./src/db/migrations",
+      directory: "./src/infra/db/migrations",
     },
     seeds: {
       directory: "./src/db/seeds",

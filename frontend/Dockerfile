@@ -2,14 +2,15 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 
-COPY package.json ./
-COPY tsconfig.json ./
-COPY react-router.config.ts ./
-COPY vite.config.ts ./
-COPY tailwind.config.ts ./
-COPY postcss.config.cjs ./
-COPY components.json ./
-COPY src ./src
+COPY tsconfig.base.json /tsconfig.base.json
+COPY frontend/package.json ./
+COPY frontend/tsconfig.json ./
+COPY frontend/react-router.config.ts ./
+COPY frontend/vite.config.ts ./
+COPY frontend/tailwind.config.ts ./
+COPY frontend/postcss.config.cjs ./
+COPY frontend/components.json ./
+COPY frontend/src ./src
 
 RUN npm install
 RUN npm run build

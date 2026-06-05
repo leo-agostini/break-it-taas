@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: app
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: breakit-backend:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3001
+              name: http
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: PORT
+              value: "3001"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-env
+                  key: JWT_SECRET
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-env
+                  key: JWT_REFRESH_SECRET
+            - name: K3S_QUEUE_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: K3S_QUEUE_ENDPOINT
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-env
+                  key: DATABASE_URL
+            - name: RUNNER_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-env
+                  key: RUNNER_SHARED_SECRET
+            - name: COOKIE_SAMESITE
+              valueFrom:
+                secretKeyRef:
+                  name: app-env
+                  key: COOKIE_SAMESITE
+            - name: COOKIE_SECURE
+              valueFrom:
+                secretKeyRef:
+                  name: app-env
+                  key: COOKIE_SECURE
+            - name: RUNNER_CALLBACK_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RUNNER_CALLBACK_BASE_URL
+            - name: RUNNER_IMAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: RUNNER_IMAGE
+            - name: K3S_NAMESPACE
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: K3S_NAMESPACE
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15

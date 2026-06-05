@@ -1,4 +1,4 @@
-import { TestCase } from '@/domain/entities/test-case';
+import { TestCase, TestCaseOwnerType } from '@/domain/entities/test-case';
 import { OutboxEvent } from '@/domain/entities/outbox-event';
 import { TestRunEvents } from '@/domain/events/test-run-events';
 import { TestRun } from '@/domain/entities/test-run';
@@ -12,10 +12,12 @@ import type { OutboxRepository } from '@/application/repositories/outbox-reposit
 import type { TestCaseRepository } from '@/application/repositories/test-case-repository';
 import type { TestRunRepository } from '@/application/repositories/test-run-repository';
 import { LoadProfile } from '@/domain/vos/load-profile';
+import { AuthorizationError } from '@/domain/errors/custom-errors';
 import {
   newTestCaseSchema,
   type NewTestCaseInput,
 } from '../validators/new-test-case-validator';
+import type { ActorContext } from '@/application/ports/actor-context';
 
 export class CreateNewTestCaseUseCase {
   constructor(
@@ -27,8 +29,17 @@ export class CreateNewTestCaseUseCase {
 
   async execute(
     input: NewTestCaseInput,
+    actor: ActorContext,
   ): Promise<{ testCaseId: UUID; testRunId: UUID }> {
     const payload = newTestCaseSchema.parse(input);
+    const requestOwner =
+      payload.ownerType === TestCaseOwnerType.ORGANIZATION
+        ? actor.orgId
+        : actor.userId;
+
+    if (payload.ownerId !== requestOwner) {
+      throw new AuthorizationError();
+    }
 
     const loadProfile = LoadProfile.create(
       payload.loadProfile.mode,
