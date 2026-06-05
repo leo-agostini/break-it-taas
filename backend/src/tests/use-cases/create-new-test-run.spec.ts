@@ -14,7 +14,7 @@ import {
   ResourceProfile,
 } from '@/domain/vos/execution-policy';
 import { LoadMode, LoadProfile, TimeUnit } from '@/domain/vos/load-profile';
-import { Step, CheckKind, HttpMethod } from '@/domain/vos/step';
+import { CheckKind, HttpMethod, Step } from '@/domain/vos/step';
 import { TargetSystem } from '@/domain/vos/target-system';
 import { ThresholdPolicy } from '@/domain/vos/threshold-policy';
 import { InMemoryOutboxRepository } from '@/tests/mocks/in-memory-outbox-repository';

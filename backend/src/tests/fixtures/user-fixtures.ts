@@ -1,4 +1,6 @@
-export function makeValidNewUserInput(overrides?: Partial<Record<string, unknown>>) {
+export function makeValidNewUserInput(
+  overrides?: Partial<Record<string, unknown>>,
+) {
   return {
     name: 'Alice Example',
     nickname: 'alice',

@@ -21,7 +21,10 @@ export class InMemoryTestCaseRepository implements TestCaseRepository {
     const testCase = this.items.get(args.testCaseId);
     if (!testCase) return null;
 
-    if (testCase.ownerType === 'USER' && testCase.ownerId === args.actorUserId) {
+    if (
+      testCase.ownerType === 'USER' &&
+      testCase.ownerId === args.actorUserId
+    ) {
       return testCase;
     }
 

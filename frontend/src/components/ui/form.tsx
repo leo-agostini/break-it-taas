@@ -1,21 +1,21 @@
 import type * as LabelPrimitive from '@radix-ui/react-label';
 import { Slot } from '@radix-ui/react-slot';
 import {
+  type ComponentPropsWithoutRef,
+  type ElementRef,
+  type HTMLAttributes,
   createContext,
   forwardRef,
   useContext,
   useId,
-  type ComponentPropsWithoutRef,
-  type ElementRef,
-  type HTMLAttributes,
 } from 'react';
 import {
   Controller,
-  FormProvider,
-  useFormContext,
   type ControllerProps,
   type FieldPath,
   type FieldValues,
+  FormProvider,
+  useFormContext,
 } from 'react-hook-form';
 
 import { Label } from '@/components/ui/label';
@@ -78,18 +78,17 @@ type FormItemContextValue = {
 
 const FormItemContext = createContext<FormItemContextValue | null>(null);
 
-const FormItem = forwardRef<
-  HTMLDivElement,
-  HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => {
-  const id = useId();
+const FormItem = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => {
+    const id = useId();
 
-  return (
-    <FormItemContext.Provider value={{ id }}>
-      <div ref={ref} className={cn('space-y-2', className)} {...props} />
-    </FormItemContext.Provider>
-  );
-});
+    return (
+      <FormItemContext.Provider value={{ id }}>
+        <div ref={ref} className={cn('space-y-2', className)} {...props} />
+      </FormItemContext.Provider>
+    );
+  },
+);
 FormItem.displayName = 'FormItem';
 
 const FormLabel = forwardRef<

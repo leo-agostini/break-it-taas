@@ -3,7 +3,11 @@ import { z } from 'zod';
 export const signupSchema = z.object({
   name: z.string().min(1, 'Name is required.'),
   nickname: z.string().min(1, 'Nickname is required.'),
-  photoUrl: z.string().url('Photo URL must be valid.').optional().or(z.literal('')),
+  photoUrl: z
+    .string()
+    .url('Photo URL must be valid.')
+    .optional()
+    .or(z.literal('')),
   email: z.email('Please enter a valid email.'),
   password: z
     .string()

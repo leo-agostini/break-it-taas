@@ -1,9 +1,5 @@
-import {
-  BatchV1Api,
-  KubeConfig,
-  type V1Job,
-} from '@kubernetes/client-node';
 import { readFile } from 'node:fs/promises';
+import { BatchV1Api, KubeConfig, type V1Job } from '@kubernetes/client-node';
 
 export class KubernetesJobClient {
   private readonly batchApi: BatchV1Api;
@@ -80,7 +76,9 @@ export class KubernetesJobClient {
 
     if (!response.ok) {
       const body = await response.text();
-      const error = new Error(`K8s API returned ${response.status}: ${body}`) as Error & { statusCode?: number };
+      const error = new Error(
+        `K8s API returned ${response.status}: ${body}`,
+      ) as Error & { statusCode?: number };
       error.statusCode = response.status;
       throw error;
     }
@@ -107,7 +105,9 @@ export class KubernetesJobClient {
 
     if (!response.ok) {
       const body = await response.text();
-      const error = new Error(`K8s API returned ${response.status}: ${body}`) as Error & { statusCode?: number };
+      const error = new Error(
+        `K8s API returned ${response.status}: ${body}`,
+      ) as Error & { statusCode?: number };
       error.statusCode = response.status;
       throw error;
     }
@@ -115,7 +115,10 @@ export class KubernetesJobClient {
     return (await response.json()) as V1Job;
   }
 
-  private async readInClusterCredentials(): Promise<{ token: string; ca: string }> {
+  private async readInClusterCredentials(): Promise<{
+    token: string;
+    ca: string;
+  }> {
     const [token, ca] = await Promise.all([
       readFile('/var/run/secrets/kubernetes.io/serviceaccount/token', 'utf8'),
       readFile('/var/run/secrets/kubernetes.io/serviceaccount/ca.crt', 'utf8'),

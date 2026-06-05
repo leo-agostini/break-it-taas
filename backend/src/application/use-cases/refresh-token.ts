@@ -1,5 +1,5 @@
-import { AuthenticationError } from '@/domain/errors/custom-errors';
 import type { JwtAuthService } from '@/application/services/jwt-auth';
+import { AuthenticationError } from '@/domain/errors/custom-errors';
 
 export class RefreshTokenUseCase {
   constructor(private readonly jwtAuthService: JwtAuthService) {}

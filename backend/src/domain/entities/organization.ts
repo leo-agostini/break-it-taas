@@ -1,5 +1,5 @@
-import { randomUUIDv7 } from 'bun';
 import { ValidationError } from '@/domain/errors/custom-errors';
+import { randomUUIDv7 } from 'bun';
 
 interface OrganizationConstructorArgs {
   id: UUID;

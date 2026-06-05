@@ -1,6 +1,6 @@
 import type { TestRunMetricsRepository } from '@/application/repositories/test-run-metrics-repository';
-import type { AuthContext } from '@/infra/http/middlewares/authenticator';
 import { NotFoundError } from '@/domain/errors/custom-errors';
+import type { AuthContext } from '@/infra/http/middlewares/authenticator';
 
 export class GetTestRunReportUseCase {
   constructor(private readonly metricsRepository: TestRunMetricsRepository) {}

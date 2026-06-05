@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { CreateNewTestCaseUseCase } from '@/application/use-cases/create-new-test-case';
+import { TestCaseOwnerType } from '@/domain/entities/test-case';
 import {
   AuthorizationError,
   LoadProfileCompatibilityError,
   ValidationError,
 } from '@/domain/errors/custom-errors';
-import { TestCaseOwnerType } from '@/domain/entities/test-case';
 import { LoadMode, TimeUnit } from '@/domain/vos/load-profile';
+import { makeValidNewTestCaseInput } from '@/tests/fixtures/test-case-fixtures';
 import { InMemoryOutboxRepository } from '@/tests/mocks/in-memory-outbox-repository';
 import { InMemoryTestCaseRepository } from '@/tests/mocks/in-memory-test-case-repository';
 import { InMemoryTestRunRepository } from '@/tests/mocks/in-memory-test-run-repository';
 import { InMemoryUnitOfWork } from '@/tests/mocks/in-memory-unit-of-work';
-import { makeValidNewTestCaseInput } from '@/tests/fixtures/test-case-fixtures';
 
 describe('Create new test case', () => {
   const testCaseRepository = new InMemoryTestCaseRepository();

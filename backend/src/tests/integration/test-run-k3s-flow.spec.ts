@@ -1,19 +1,29 @@
 import { describe, expect, it } from 'bun:test';
 
-const baseUrl = process.env.INTEGRATION_BASE_URL ?? 'http://api.127.0.0.1.sslip.io:8080';
-const kubeContext = process.env.INTEGRATION_KUBECONFIG_CONTEXT ?? 'k3d-workload';
+const baseUrl =
+  process.env.INTEGRATION_BASE_URL ?? 'http://api.127.0.0.1.sslip.io:8080';
+const kubeContext =
+  process.env.INTEGRATION_KUBECONFIG_CONTEXT ?? 'k3d-workload';
 const dbNamespace = process.env.INTEGRATION_DB_NAMESPACE ?? 'data';
 const dbStatefulSet = process.env.INTEGRATION_DB_STATEFULSET ?? 'postgres';
 const dbName = process.env.INTEGRATION_DB_NAME ?? 'taas';
 const dbUser = process.env.INTEGRATION_DB_USER ?? 'appuser';
 const targetNamespace = process.env.INTEGRATION_TARGET_NAMESPACE ?? 'app';
-const targetLabelSelector = process.env.INTEGRATION_TARGET_LABEL_SELECTOR ?? 'app=load-target';
+const targetLabelSelector =
+  process.env.INTEGRATION_TARGET_LABEL_SELECTOR ?? 'app=load-target';
 const requireSaturation = process.env.INTEGRATION_REQUIRE_SATURATION === '1';
-const targetCpuLimitMilli = Number(process.env.INTEGRATION_TARGET_CPU_LIMIT_MILLI ?? '20');
+const targetCpuLimitMilli = Number(
+  process.env.INTEGRATION_TARGET_CPU_LIMIT_MILLI ?? '20',
+);
 const targetLoadRate = Number(process.env.INTEGRATION_TARGET_RATE ?? '50');
-const testDurationSeconds = Number(process.env.INTEGRATION_TEST_DURATION_SECONDS ?? '20');
-const executionResourceProfile = process.env.INTEGRATION_EXECUTION_RESOURCE_PROFILE ?? 'SMALL';
-const executionTimeoutSeconds = Number(process.env.INTEGRATION_EXECUTION_TIMEOUT_SECONDS ?? '30');
+const testDurationSeconds = Number(
+  process.env.INTEGRATION_TEST_DURATION_SECONDS ?? '20',
+);
+const executionResourceProfile =
+  process.env.INTEGRATION_EXECUTION_RESOURCE_PROFILE ?? 'SMALL';
+const executionTimeoutSeconds = Number(
+  process.env.INTEGRATION_EXECUTION_TIMEOUT_SECONDS ?? '30',
+);
 
 const shouldRun = process.env.RUN_K3S_INTEGRATION === '1';
 const suite = shouldRun ? describe : describe.skip;
@@ -72,7 +82,9 @@ async function poll<T>(
 
   while (!predicate(latest)) {
     if (Date.now() - start > timeoutMs) {
-      throw new Error(`Polling timeout after ${timeoutMs}ms. Last value: ${JSON.stringify(latest)}`);
+      throw new Error(
+        `Polling timeout after ${timeoutMs}ms. Last value: ${JSON.stringify(latest)}`,
+      );
     }
     await Bun.sleep(intervalMs);
     latest = await fn();
@@ -128,10 +140,17 @@ async function createTestCase(token: string, ownerId: string) {
       authStrategy: { kind: 'NONE' },
       loadProfile: {
         mode: 'CONSTANT',
-        config: { duration: testDurationSeconds, targetRate: targetLoadRate, timeUnit: 'SECONDS' },
+        config: {
+          duration: testDurationSeconds,
+          targetRate: targetLoadRate,
+          timeUnit: 'SECONDS',
+        },
       },
       thresholdPolicy: { abortOnFail: false },
-      executionPolicy: { resourceProfile: executionResourceProfile, timeoutSeconds: executionTimeoutSeconds },
+      executionPolicy: {
+        resourceProfile: executionResourceProfile,
+        timeoutSeconds: executionTimeoutSeconds,
+      },
       steps: [
         {
           path: '/',
@@ -180,7 +199,10 @@ async function getTargetPodMaxCpuMilli(): Promise<number | null> {
     return null;
   }
 
-  const lines = out.split('\n').map((line) => line.trim()).filter(Boolean);
+  const lines = out
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
   if (lines.length === 0) {
     return null;
   }
@@ -283,7 +305,12 @@ suite('k3s test run integration flow', () => {
     );
     expect(['QUEUED', 'RUNNING']).toContain(firstStatus);
 
-    const hasPod = await poll(() => podExists(created.testRunId), Boolean, 60000, 2000);
+    const hasPod = await poll(
+      () => podExists(created.testRunId),
+      Boolean,
+      60000,
+      2000,
+    );
     expect(hasPod).toBe(true);
 
     let observedPeakCpuMilli = 0;
@@ -305,7 +332,12 @@ suite('k3s test run integration flow', () => {
     );
     expect(terminalStatuses.has(terminal)).toBe(true);
 
-    const hasResult = await poll(() => resultExists(created.testRunId), Boolean, 60000, 2000);
+    const hasResult = await poll(
+      () => resultExists(created.testRunId),
+      Boolean,
+      60000,
+      2000,
+    );
     expect(hasResult).toBe(true);
 
     if (requireSaturation) {

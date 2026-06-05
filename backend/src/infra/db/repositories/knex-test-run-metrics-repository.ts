@@ -1,5 +1,3 @@
-import { randomUUIDv7 } from 'bun';
-import type { Knex } from 'knex';
 import type { TransactionContext } from '@/application/ports/unit-of-work';
 import type {
   TestRunMetricsProjection,
@@ -8,24 +6,26 @@ import type {
 } from '@/application/repositories/test-run-metrics-repository';
 import { TestCaseOwnerType } from '@/domain/entities/test-case';
 import { db } from '@/infra/db/knex';
+import { randomUUIDv7 } from 'bun';
+import type { Knex } from 'knex';
 
 type TestRunMetricsRow = {
   id: UUID;
   test_run_id: UUID;
   status: string;
-  runtime_ref?: string;
-  completed_at?: Date;
-  requested_rate?: string;
-  requested_time_unit?: string;
+  runtime_ref?: string | null;
+  completed_at?: Date | null;
+  requested_rate?: number;
+  requested_time_unit?: string | null;
   requested_duration_seconds?: number;
-  achieved_rps?: string;
+  achieved_rps?: number;
   total_requests?: number;
   dropped_iterations?: number;
-  failure_rate?: string;
-  success_rate?: string;
-  p95_ms?: string;
-  p99_ms?: string;
-  median_ms?: string;
+  failure_rate?: number;
+  success_rate?: number;
+  p95_ms?: number;
+  p99_ms?: number;
+  median_ms?: number;
   generator_limited: boolean;
   timeouts_detected: boolean;
   created_at: Date;
@@ -58,7 +58,9 @@ export class KnexTestRunMetricsRepository implements TestRunMetricsRepository {
         test_run_id: projection.testRunId,
         status: projection.status,
         runtime_ref: projection.runtimeRef,
-        completed_at: projection.completedAt ? new Date(projection.completedAt) : null,
+        completed_at: projection.completedAt
+          ? new Date(projection.completedAt)
+          : null,
         requested_rate: projection.requestedRate,
         requested_time_unit: projection.requestedTimeUnit,
         requested_duration_seconds: projection.requestedDurationSeconds,
@@ -79,7 +81,9 @@ export class KnexTestRunMetricsRepository implements TestRunMetricsRepository {
       .merge({
         status: projection.status,
         runtime_ref: projection.runtimeRef,
-        completed_at: projection.completedAt ? new Date(projection.completedAt) : null,
+        completed_at: projection.completedAt
+          ? new Date(projection.completedAt)
+          : null,
         requested_rate: projection.requestedRate,
         requested_time_unit: projection.requestedTimeUnit,
         requested_duration_seconds: projection.requestedDurationSeconds,
@@ -109,25 +113,28 @@ export class KnexTestRunMetricsRepository implements TestRunMetricsRepository {
       .where('m.test_run_id', args.testRunId)
       .andWhere((query) => {
         query
-          .where({
-            'tc.owner_type': TestCaseOwnerType.USER,
-            'tc.owner_id': args.actorUserId,
-          })
-          .orWhere({
-            'tc.owner_type': TestCaseOwnerType.ORGANIZATION,
-            'tc.owner_id': args.actorOrgId,
+          .where('tc.owner_type', TestCaseOwnerType.USER)
+          .where('tc.owner_id', args.actorUserId)
+          .orWhere((ownerQuery) => {
+            ownerQuery
+              .where('tc.owner_type', TestCaseOwnerType.ORGANIZATION)
+              .where('tc.owner_id', args.actorOrgId);
           });
       })
       .select(
         'm.*',
-        db.raw("COALESCE((r.payload->'artifacts')::jsonb, '[]'::jsonb) as artifacts"),
+        db.raw(
+          "COALESCE((r.payload->'artifacts')::jsonb, '[]'::jsonb) as artifacts",
+        ),
       )
       .first();
 
     if (!row) return null;
 
-    const artifacts = Array.isArray((row as unknown as { artifacts?: unknown }).artifacts)
-      ? ((row as unknown as { artifacts: string[] }).artifacts)
+    const artifacts = Array.isArray(
+      (row as unknown as { artifacts?: unknown }).artifacts,
+    )
+      ? (row as unknown as { artifacts: string[] }).artifacts
       : [];
 
     return {

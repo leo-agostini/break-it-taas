@@ -44,7 +44,8 @@ export function mapErrorToHttp(error: unknown): MappedHttpError {
       error: {
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Unexpected internal server error',
-        description: 'An unexpected error happened while processing the request.',
+        description:
+          'An unexpected error happened while processing the request.',
         help: 'Retry the request. If the issue persists, contact support.',
       },
     },

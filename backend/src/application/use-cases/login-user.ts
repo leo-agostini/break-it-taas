@@ -1,8 +1,8 @@
 import type { UserRepository } from '@/application/repositories/user-repository';
 import type { JwtAuthService } from '@/application/services/jwt-auth';
 import {
-  loginUserSchema,
   type LoginUserInput,
+  loginUserSchema,
 } from '@/application/validators/new-user-validator';
 import { AuthenticationError } from '@/domain/errors/custom-errors';
 import { verifyPassword } from '@/domain/services/password-hasher';
@@ -33,7 +33,10 @@ export class LoginUserUseCase {
       throw new AuthenticationError('Invalid email or password');
     }
 
-    const isValidPassword = await verifyPassword(payload.password, user.passwordHash);
+    const isValidPassword = await verifyPassword(
+      payload.password,
+      user.passwordHash,
+    );
     if (!isValidPassword) {
       throw new AuthenticationError('Invalid email or password');
     }

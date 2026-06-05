@@ -1,6 +1,6 @@
-import type * as React from 'react';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Check, ChevronRight, Circle } from 'lucide-react';
+import type * as React from 'react';
 import { forwardRef } from 'react';
 
 import { cn } from '@/lib/utils';

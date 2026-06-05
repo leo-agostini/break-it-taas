@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { OutboxDispatcherWorker } from '@/application/workers/outbox-dispatcher-worker';
 import type { TestRunQueue } from '@/application/ports/test-run-queue';
-import { TestRun } from '@/domain/entities/test-run';
+import { OutboxDispatcherWorker } from '@/application/workers/outbox-dispatcher-worker';
 import { OutboxEvent } from '@/domain/entities/outbox-event';
 import { OutboxEventStatus } from '@/domain/entities/outbox-event';
+import { TestRun } from '@/domain/entities/test-run';
 import { TestRunStatus } from '@/domain/entities/test-run';
 import { TestRunEvents } from '@/domain/events/test-run-events';
 import { InMemoryOutboxRepository } from '@/tests/mocks/in-memory-outbox-repository';
@@ -46,7 +46,9 @@ describe('OutboxDispatcherWorker', () => {
       id: run.testCaseId,
     } as never);
     await testRunRepository.save(run);
-    await outboxRepository.enqueue(OutboxEvent.create(TestRunEvents.requested(run.id)));
+    await outboxRepository.enqueue(
+      OutboxEvent.create(TestRunEvents.requested(run.id)),
+    );
 
     await worker.dispatchPending(10);
 
@@ -75,7 +77,9 @@ describe('OutboxDispatcherWorker', () => {
       id: run.testCaseId,
     } as never);
     await testRunRepository.save(run);
-    await outboxRepository.enqueue(OutboxEvent.create(TestRunEvents.requested(run.id)));
+    await outboxRepository.enqueue(
+      OutboxEvent.create(TestRunEvents.requested(run.id)),
+    );
 
     await worker.dispatchPending(10);
 

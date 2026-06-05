@@ -1,6 +1,6 @@
 import {
-  newTestCaseSchema,
   type NewTestCaseInput,
+  newTestCaseSchema,
 } from '@/application/validators/new-test-case-validator';
 import type { AppContainer } from '@/infra/http/container';
 import type { AuthContext } from '@/infra/http/middlewares/authenticator';

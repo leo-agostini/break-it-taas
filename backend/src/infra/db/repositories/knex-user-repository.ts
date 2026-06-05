@@ -1,8 +1,8 @@
-import type { Knex } from 'knex';
 import type { TransactionContext } from '@/application/ports/unit-of-work';
 import type { UserRepository } from '@/application/repositories/user-repository';
-import { db } from '@/infra/db/knex';
 import { User, type UserRole } from '@/domain/entities/user';
+import { db } from '@/infra/db/knex';
+import type { Knex } from 'knex';
 
 type UserRow = {
   id: UUID;
@@ -37,7 +37,10 @@ const toEntity = (row: UserRow): User => {
 };
 
 export class KnexUserRepository implements UserRepository {
-  async findByEmail(email: string, tx?: TransactionContext): Promise<User | null> {
+  async findByEmail(
+    email: string,
+    tx?: TransactionContext,
+  ): Promise<User | null> {
     const conn = contextOrDb(tx);
     const normalizedEmail = email.trim().toLowerCase();
     const row = await conn<UserRow>(USERS_TABLE)

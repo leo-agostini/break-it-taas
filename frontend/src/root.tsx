@@ -1,9 +1,9 @@
+import { Toaster } from '@/components/ui/sonner';
+import { ThemeProvider } from 'next-themes';
 import type { ReactNode } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
-import { ThemeProvider } from 'next-themes';
 import { RecoilRoot } from 'recoil';
 import { SWRConfig } from 'swr';
-import { Toaster } from '@/components/ui/sonner';
 import './app.css';
 
 export function Layout({ children }: { children: ReactNode }) {

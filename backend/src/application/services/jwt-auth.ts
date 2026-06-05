@@ -1,5 +1,8 @@
-import jwt from 'jsonwebtoken';
 import { AuthenticationError } from '@/domain/errors/custom-errors';
+import jwt from 'jsonwebtoken';
+
+export type JwtExpiresIn = NonNullable<jwt.SignOptions['expiresIn']>;
+export type JwtStringExpiresIn = Extract<JwtExpiresIn, string>;
 
 type AuthTokenType = 'access' | 'refresh';
 
@@ -13,8 +16,8 @@ interface TokenClaims {
 interface JwtAuthConfig {
   accessSecret: string;
   refreshSecret: string;
-  accessTtl: string;
-  refreshTtl: string;
+  accessTtl: JwtStringExpiresIn;
+  refreshTtl: JwtStringExpiresIn;
 }
 
 export class JwtAuthService {

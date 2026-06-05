@@ -1,8 +1,8 @@
 import { randomUUIDv7 } from 'bun';
 
 import type {
-  OutboxEventMap,
   OutboxEventEnum,
+  OutboxEventMap,
 } from '@/domain/events/outbox-event-map';
 
 export enum OutboxEventStatus {

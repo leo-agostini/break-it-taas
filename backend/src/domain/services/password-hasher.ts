@@ -1,6 +1,6 @@
-import argon2 from 'argon2';
 import { randomBytes } from 'node:crypto';
 import { ValidationError } from '@/domain/errors/custom-errors';
+import argon2 from 'argon2';
 
 const ARGON2_OPTIONS: argon2.Options & { raw?: false } = {
   type: argon2.argon2id,

@@ -3,12 +3,12 @@ import type { OutboxRepository } from '@/application/repositories/outbox-reposit
 import type { TestCaseRepository } from '@/application/repositories/test-case-repository';
 import type { TestRunRepository } from '@/application/repositories/test-run-repository';
 import { OutboxEventStatus } from '@/domain/entities/outbox-event';
-import { OutboxEventEnum } from '@/domain/events/outbox-event-map';
-import { TestRunEvents } from '@/domain/events/test-run-events';
 import {
   NotFoundError,
   OutboxEventPayloadError,
 } from '@/domain/errors/custom-errors';
+import { OutboxEventEnum } from '@/domain/events/outbox-event-map';
+import { TestRunEvents } from '@/domain/events/test-run-events';
 
 // TODO: Refactor this class.
 export class OutboxDispatcherWorker {
@@ -54,7 +54,10 @@ export class OutboxDispatcherWorker {
           throw new NotFoundError(`Test case ${testRun.testCaseId} not found`);
         }
 
-        const { runtimeRef } = await this.testRunQueue.publish(testRun, testCase);
+        const { runtimeRef } = await this.testRunQueue.publish(
+          testRun,
+          testCase,
+        );
         testRun.runtimeRef = runtimeRef;
         testRun.start();
         await this.testRunRepository.save(testRun);

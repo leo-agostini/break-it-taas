@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test';
+import { ValidationError } from '@/domain/errors/custom-errors';
 import {
   hashPassword,
   verifyPassword,
 } from '@/domain/services/password-hasher';
-import { ValidationError } from '@/domain/errors/custom-errors';
 
 describe('password-hasher service', () => {
   it('hashes and verifies a password', async () => {

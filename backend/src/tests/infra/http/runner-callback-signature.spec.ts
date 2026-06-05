@@ -1,5 +1,5 @@
-import { createHmac } from 'node:crypto';
 import { describe, expect, it } from 'bun:test';
+import { createHmac } from 'node:crypto';
 import { AuthenticationError } from '@/domain/errors/custom-errors';
 import { verifyRunnerCallbackSignature } from '@/infra/http/security/runner-callback-signature';
 

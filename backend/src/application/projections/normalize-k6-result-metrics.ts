@@ -1,6 +1,6 @@
-import type { TestRunStatus } from '@/domain/entities/test-run';
-import type { TestCase } from '@/domain/entities/test-case';
 import type { TestRunMetricsProjection } from '@/application/repositories/test-run-metrics-repository';
+import type { TestCase } from '@/domain/entities/test-case';
+import type { TestRunStatus } from '@/domain/entities/test-run';
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -18,7 +18,10 @@ const asNumber = (value: unknown): number | undefined => {
   return undefined;
 };
 
-const roundNumber = (value: number | undefined, decimals: number): number | undefined => {
+const roundNumber = (
+  value: number | undefined,
+  decimals: number,
+): number | undefined => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
@@ -52,7 +55,9 @@ const getMetricPercentile = (
   return asNumber(metric[percentile]);
 };
 
-const pickFirstNumber = (...values: Array<number | undefined>): number | undefined => {
+const pickFirstNumber = (
+  ...values: Array<number | undefined>
+): number | undefined => {
   for (const value of values) {
     if (typeof value === 'number' && Number.isFinite(value)) return value;
   }
@@ -61,15 +66,21 @@ const pickFirstNumber = (...values: Array<number | undefined>): number | undefin
 
 const toRequestedDurationSeconds = (testCase: TestCase): number | undefined => {
   if (testCase.loadProfile.mode === 'CONSTANT') {
-    const duration = asNumber((testCase.loadProfile.config as Record<string, unknown>).duration);
-    const timeUnit = String((testCase.loadProfile.config as Record<string, unknown>).timeUnit ?? 'SECONDS').toUpperCase();
+    const duration = asNumber(
+      (testCase.loadProfile.config as Record<string, unknown>).duration,
+    );
+    const timeUnit = String(
+      (testCase.loadProfile.config as Record<string, unknown>).timeUnit ??
+        'SECONDS',
+    ).toUpperCase();
     if (!duration) return undefined;
     if (timeUnit === 'MINUTES') return duration * 60;
     if (timeUnit === 'HOURS') return duration * 3600;
     return duration;
   }
 
-  const stages = (testCase.loadProfile.config as Record<string, unknown>).stages;
+  const stages = (testCase.loadProfile.config as Record<string, unknown>)
+    .stages;
   if (!Array.isArray(stages)) return undefined;
   return stages.reduce((acc, stage) => {
     const row = asRecord(stage);
@@ -89,7 +100,10 @@ export const normalizeK6ResultMetrics = (args: {
   const summary = asRecord(args.resultSummary.summary);
   const metrics = asRecord(summary.metrics);
 
-  const loadConfig = args.testCase.loadProfile.config as Record<string, unknown>;
+  const loadConfig = args.testCase.loadProfile.config as Record<
+    string,
+    unknown
+  >;
   const requestedRate =
     args.testCase.loadProfile.mode === 'CONSTANT'
       ? asNumber(loadConfig.targetRate)
@@ -98,10 +112,16 @@ export const normalizeK6ResultMetrics = (args: {
 
   const achievedRps = getMetricValue(metrics, 'http_reqs', 'rate');
   const totalRequests = getMetricValue(metrics, 'http_reqs', 'count');
-  const droppedIterations = getMetricValue(metrics, 'dropped_iterations', 'count');
+  const droppedIterations = getMetricValue(
+    metrics,
+    'dropped_iterations',
+    'count',
+  );
   const failureRate = getMetricValue(metrics, 'http_req_failed', 'value');
   const successRate =
-    typeof failureRate === 'number' ? Math.max(0, Math.min(1, 1 - failureRate)) : undefined;
+    typeof failureRate === 'number'
+      ? Math.max(0, Math.min(1, 1 - failureRate))
+      : undefined;
   const p95Ms = pickFirstNumber(
     getMetricPercentile(metrics, 'http_req_duration', 'p(95)'),
     getMetricPercentile(metrics, 'http_req_duration', 'p(90)'),
@@ -116,13 +136,19 @@ export const normalizeK6ResultMetrics = (args: {
     getMetricPercentile(metrics, 'http_req_duration', 'med'),
     getMetricPercentile(metrics, 'http_req_duration', 'p(90)'),
   );
-  const waitingP95Ms = getMetricPercentile(metrics, 'http_req_waiting', 'p(95)');
+  const waitingP95Ms = getMetricPercentile(
+    metrics,
+    'http_req_waiting',
+    'p(95)',
+  );
   const vusCurrent = getMetricValue(metrics, 'vus', 'value');
   const vusMax = getMetricValue(metrics, 'vus_max', 'value');
 
   const generatorLimited =
     (typeof droppedIterations === 'number' && droppedIterations > 0) ||
-    (typeof vusCurrent === 'number' && typeof vusMax === 'number' && vusCurrent >= vusMax);
+    (typeof vusCurrent === 'number' &&
+      typeof vusMax === 'number' &&
+      vusCurrent >= vusMax);
 
   return {
     testRunId: args.testRunId,

@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'bun:test';
 import { normalizeK6ResultMetrics } from '@/application/projections/normalize-k6-result-metrics';
-import { TestCase, TestCaseOwnerType, TestType } from '@/domain/entities/test-case';
+import {
+  TestCase,
+  TestCaseOwnerType,
+  TestType,
+} from '@/domain/entities/test-case';
 import { TestRunStatus } from '@/domain/entities/test-run';
 import { AuthStrategyKind } from '@/domain/vos/auth-strategy';
-import { ExecutionPolicy, ResourceProfile } from '@/domain/vos/execution-policy';
+import {
+  ExecutionPolicy,
+  ResourceProfile,
+} from '@/domain/vos/execution-policy';
 import { LoadMode, LoadProfile, TimeUnit } from '@/domain/vos/load-profile';
 import { CheckKind, HttpMethod, Step } from '@/domain/vos/step';
 import { TargetSystem } from '@/domain/vos/target-system';
@@ -22,9 +29,19 @@ function makeTestCase() {
       targetRate: 1200,
       timeUnit: TimeUnit.SECONDS,
     }),
-    thresholdPolicy: new ThresholdPolicy(undefined, undefined, undefined, undefined, false),
+    thresholdPolicy: new ThresholdPolicy(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+    ),
     executionPolicy: new ExecutionPolicy(ResourceProfile.LARGE, 120),
-    steps: [new Step('/', HttpMethod.GET, [{ kind: CheckKind.STATUS_CODE, expected: 200 }])],
+    steps: [
+      new Step('/', HttpMethod.GET, [
+        { kind: CheckKind.STATUS_CODE, expected: 200 },
+      ]),
+    ],
   });
 }
 

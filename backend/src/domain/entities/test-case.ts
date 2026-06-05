@@ -1,10 +1,10 @@
-import { randomUUIDv7 } from 'bun';
 import type { AuthStrategy } from '@/domain/vos/auth-strategy';
 import type { ExecutionPolicy } from '@/domain/vos/execution-policy';
-import type { LoadProfile, LoadMode } from '@/domain/vos/load-profile';
+import type { LoadMode, LoadProfile } from '@/domain/vos/load-profile';
+import type { Step } from '@/domain/vos/step';
 import type { TargetSystem } from '@/domain/vos/target-system';
 import type { ThresholdPolicy } from '@/domain/vos/threshold-policy';
-import type { Step } from '@/domain/vos/step';
+import { randomUUIDv7 } from 'bun';
 
 export enum TestType {
   SPIKE = 'SPIKE',

@@ -1,20 +1,20 @@
+import { JwtAuthService } from '@/application/services/jwt-auth';
+import { CheckAuthUseCase } from '@/application/use-cases/check-auth';
+import { CompleteTestRunFromCallbackUseCase } from '@/application/use-cases/complete-test-run-from-callback';
 import { CreateNewTestCaseUseCase } from '@/application/use-cases/create-new-test-case';
 import { CreateNewTestRunUseCase } from '@/application/use-cases/create-new-test-run';
-import { CompleteTestRunFromCallbackUseCase } from '@/application/use-cases/complete-test-run-from-callback';
-import { GetTestRunReportUseCase } from '@/application/use-cases/get-test-run-report';
 import { CreateUserUseCase } from '@/application/use-cases/create-user';
+import { GetTestRunReportUseCase } from '@/application/use-cases/get-test-run-report';
 import { LoginUserUseCase } from '@/application/use-cases/login-user';
-import { CheckAuthUseCase } from '@/application/use-cases/check-auth';
 import { RefreshTokenUseCase } from '@/application/use-cases/refresh-token';
-import { JwtAuthService } from '@/application/services/jwt-auth';
+import { env } from '@/infra/config/env';
 import { KnexUnitOfWork } from '@/infra/db/knex-unit-of-work';
 import { KnexOutboxRepository } from '@/infra/db/repositories/knex-outbox-repository';
 import { KnexResultRepository } from '@/infra/db/repositories/knex-result-repository';
 import { KnexTestCaseRepository } from '@/infra/db/repositories/knex-test-case-repository';
-import { KnexTestRunRepository } from '@/infra/db/repositories/knex-test-run-repository';
 import { KnexTestRunMetricsRepository } from '@/infra/db/repositories/knex-test-run-metrics-repository';
+import { KnexTestRunRepository } from '@/infra/db/repositories/knex-test-run-repository';
 import { KnexUserRepository } from '@/infra/db/repositories/knex-user-repository';
-import { env } from '@/infra/config/env';
 
 export function createContainer() {
   const unitOfWork = new KnexUnitOfWork();
@@ -55,7 +55,9 @@ export function createContainer() {
       testCaseRepository,
       testRunMetricsRepository,
     ),
-    getTestRunReportUseCase: new GetTestRunReportUseCase(testRunMetricsRepository),
+    getTestRunReportUseCase: new GetTestRunReportUseCase(
+      testRunMetricsRepository,
+    ),
   };
 }
 

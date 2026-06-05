@@ -1,10 +1,10 @@
-import { isAxiosError } from 'axios';
-import { redirect } from 'react-router';
 import {
   createServerCheckHttpClient,
   createServerPrivateHttpClient,
   publicHttpClient,
 } from '@/lib/httpClient';
+import { isAxiosError } from 'axios';
+import { redirect } from 'react-router';
 
 function isUnauthorized(error: unknown) {
   return isAxiosError(error) && error.response?.status === 401;

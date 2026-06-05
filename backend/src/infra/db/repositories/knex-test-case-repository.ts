@@ -1,7 +1,5 @@
-import type { Knex } from 'knex';
 import type { TransactionContext } from '@/application/ports/unit-of-work';
 import type { TestCaseRepository } from '@/application/repositories/test-case-repository';
-import { db } from '@/infra/db/knex';
 import {
   TestCase,
   TestCaseOwnerType,
@@ -12,10 +10,12 @@ import {
   ExecutionPolicy,
   type ResourceProfile,
 } from '@/domain/vos/execution-policy';
-import { LoadProfile, type LoadMode } from '@/domain/vos/load-profile';
-import { Step, type StepCheck, type HttpMethod } from '@/domain/vos/step';
+import { type LoadMode, LoadProfile } from '@/domain/vos/load-profile';
+import { type HttpMethod, Step, type StepCheck } from '@/domain/vos/step';
 import { TargetSystem } from '@/domain/vos/target-system';
 import { ThresholdPolicy } from '@/domain/vos/threshold-policy';
+import { db } from '@/infra/db/knex';
+import type { Knex } from 'knex';
 
 type TestCaseRow = {
   id: UUID;
@@ -132,13 +132,12 @@ export class KnexTestCaseRepository implements TestCaseRepository {
       .where({ id: args.testCaseId })
       .andWhere((query) => {
         query
-          .where({
-            owner_type: TestCaseOwnerType.USER,
-            owner_id: args.actorUserId,
-          })
-          .orWhere({
-            owner_type: TestCaseOwnerType.ORGANIZATION,
-            owner_id: args.actorOrgId,
+          .where('owner_type', TestCaseOwnerType.USER)
+          .where('owner_id', args.actorUserId)
+          .orWhere((ownerQuery) => {
+            ownerQuery
+              .where('owner_type', TestCaseOwnerType.ORGANIZATION)
+              .where('owner_id', args.actorOrgId);
           });
       })
       .first();
@@ -157,11 +156,21 @@ export class KnexTestCaseRepository implements TestCaseRepository {
       owner_type: testCase.ownerType,
       owner_id: testCase.ownerId,
       test_type: testCase.testType,
-      target_system: conn.raw('?::jsonb', [JSON.stringify(testCase.targetSystem)]),
-      auth_strategy: conn.raw('?::jsonb', [JSON.stringify(testCase.authStrategy)]),
-      load_profile: conn.raw('?::jsonb', [JSON.stringify(testCase.loadProfile)]),
-      threshold_policy: conn.raw('?::jsonb', [JSON.stringify(testCase.thresholdPolicy)]),
-      execution_policy: conn.raw('?::jsonb', [JSON.stringify(testCase.executionPolicy)]),
+      target_system: conn.raw('?::jsonb', [
+        JSON.stringify(testCase.targetSystem),
+      ]),
+      auth_strategy: conn.raw('?::jsonb', [
+        JSON.stringify(testCase.authStrategy),
+      ]),
+      load_profile: conn.raw('?::jsonb', [
+        JSON.stringify(testCase.loadProfile),
+      ]),
+      threshold_policy: conn.raw('?::jsonb', [
+        JSON.stringify(testCase.thresholdPolicy),
+      ]),
+      execution_policy: conn.raw('?::jsonb', [
+        JSON.stringify(testCase.executionPolicy),
+      ]),
       steps: conn.raw('?::jsonb', [JSON.stringify(testCase.steps)]),
       created_at: testCase.createdAt,
     });

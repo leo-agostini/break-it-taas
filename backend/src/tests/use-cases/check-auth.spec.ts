@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { CheckAuthUseCase } from '@/application/use-cases/check-auth';
 import { JwtAuthService } from '@/application/services/jwt-auth';
+import { CheckAuthUseCase } from '@/application/use-cases/check-auth';
 
 describe('CheckAuthUseCase', () => {
   const jwtAuthService = new JwtAuthService({

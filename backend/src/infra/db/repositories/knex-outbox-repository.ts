@@ -1,8 +1,8 @@
-import type { Knex } from "knex";
-import { db } from "@/infra/db/knex";
-import { OutboxEvent, OutboxEventStatus } from "@/domain/entities/outbox-event";
-import type { TransactionContext } from "@/application/ports/unit-of-work";
-import type { OutboxRepository } from "@/application/repositories/outbox-repository";
+import type { TransactionContext } from '@/application/ports/unit-of-work';
+import type { OutboxRepository } from '@/application/repositories/outbox-repository';
+import { OutboxEvent, OutboxEventStatus } from '@/domain/entities/outbox-event';
+import { db } from '@/infra/db/knex';
+import type { Knex } from 'knex';
 
 type OutboxRow = {
   id: string;
@@ -18,7 +18,7 @@ type OutboxRow = {
   last_error?: string;
 };
 
-const OUTBOX_TABLE = "outbox_events";
+const OUTBOX_TABLE = 'outbox_events';
 
 const toEntity = (row: OutboxRow): OutboxEvent => {
   return new OutboxEvent({
@@ -97,8 +97,8 @@ export class KnexOutboxRepository implements OutboxRepository {
       .update({
         status: OutboxEventStatus.PUBLISHED,
         published_at: new Date(),
-        processing_started_at: db.raw("NULL"),
-        last_error: db.raw("NULL"),
+        processing_started_at: db.raw('NULL'),
+        last_error: db.raw('NULL'),
       });
   }
 
@@ -118,8 +118,8 @@ export class KnexOutboxRepository implements OutboxRepository {
         status: OutboxEventStatus.PENDING,
         last_error: errorMessage,
         next_attempt_at: nextAttemptAt,
-        processing_started_at: db.raw("NULL"),
-        attempts: db.raw("attempts + 1"),
+        processing_started_at: db.raw('NULL'),
+        attempts: db.raw('attempts + 1'),
       });
   }
 
@@ -137,8 +137,8 @@ export class KnexOutboxRepository implements OutboxRepository {
       .update({
         status: OutboxEventStatus.FAILED,
         last_error: errorMessage,
-        processing_started_at: db.raw("NULL"),
-        attempts: db.raw("attempts + 1"),
+        processing_started_at: db.raw('NULL'),
+        attempts: db.raw('attempts + 1'),
       });
   }
 }

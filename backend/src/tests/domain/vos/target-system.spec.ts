@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { TargetSystem } from '@/domain/vos/target-system';
 import { ValidationError } from '@/domain/errors/custom-errors';
+import { TargetSystem } from '@/domain/vos/target-system';
 
 describe('TargetSystem VO', () => {
   it('creates with valid values', () => {

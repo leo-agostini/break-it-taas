@@ -1,11 +1,13 @@
+import type { TransactionContext } from '@/application/ports/unit-of-work';
 import type {
   TestRunMetricsProjection,
   TestRunMetricsReport,
   TestRunMetricsRepository,
 } from '@/application/repositories/test-run-metrics-repository';
-import type { TransactionContext } from '@/application/ports/unit-of-work';
 
-export class InMemoryTestRunMetricsRepository implements TestRunMetricsRepository {
+export class InMemoryTestRunMetricsRepository
+  implements TestRunMetricsRepository
+{
   items = new Map<UUID, TestRunMetricsReport>();
 
   async upsert(

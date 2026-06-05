@@ -4,13 +4,16 @@ import { TestRun } from '@/domain/entities/test-run';
 describe('K3sTestRunQueue', () => {
   it('returns runtimeRef from created job metadata', async () => {
     process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-secret';
-    process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? 'test-refresh-secret';
+    process.env.JWT_REFRESH_SECRET =
+      process.env.JWT_REFRESH_SECRET ?? 'test-refresh-secret';
     process.env.RUNNER_SHARED_SECRET =
       process.env.RUNNER_SHARED_SECRET ?? 'runner-secret';
     process.env.RUNNER_CALLBACK_BASE_URL =
       process.env.RUNNER_CALLBACK_BASE_URL ?? 'http://localhost:3001';
 
-    const { K3sTestRunQueue } = await import('@/infra/queue/k3s-test-run-queue');
+    const { K3sTestRunQueue } = await import(
+      '@/infra/queue/k3s-test-run-queue'
+    );
 
     const queue = new K3sTestRunQueue({
       createJob: async () => ({

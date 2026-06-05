@@ -1,9 +1,9 @@
-import { TestCaseOwnerType, TestType } from "@/domain/entities/test-case";
-import { AuthStrategyKind } from "@/domain/vos/auth-strategy";
-import { ResourceProfile } from "@/domain/vos/execution-policy";
-import { LoadMode, TimeUnit } from "@/domain/vos/load-profile";
-import { CheckKind, HttpMethod } from "@/domain/vos/step";
-import { z } from "zod";
+import { TestCaseOwnerType, TestType } from '@/domain/entities/test-case';
+import { AuthStrategyKind } from '@/domain/vos/auth-strategy';
+import { ResourceProfile } from '@/domain/vos/execution-policy';
+import { LoadMode, TimeUnit } from '@/domain/vos/load-profile';
+import { CheckKind, HttpMethod } from '@/domain/vos/step';
+import { z } from 'zod';
 
 const stageSchema = z.object({
   target: z.number().int().min(0),
@@ -28,7 +28,7 @@ const rampLoadProfileSchema = z.object({
   }),
 });
 
-const stepCheckSchema = z.discriminatedUnion("kind", [
+const stepCheckSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal(CheckKind.STATUS_CODE),
     expected: z.number().int(),
@@ -62,7 +62,7 @@ const secretRefSchema = z.object({
 });
 
 const authHttpRequestSchema = z.object({
-  method: z.enum(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]),
+  method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']),
   path: z.string().min(1),
   headers: z
     .array(z.object({ name: z.string().min(1), value: z.string() }))
@@ -74,7 +74,7 @@ const authHttpRequestSchema = z.object({
   timeoutMs: z.number().int().min(1).optional(),
 });
 
-const authStrategySchema = z.discriminatedUnion("kind", [
+const authStrategySchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal(AuthStrategyKind.NONE) }),
   z.object({
     kind: z.literal(AuthStrategyKind.BEARER_TOKEN),
@@ -94,10 +94,10 @@ const authStrategySchema = z.discriminatedUnion("kind", [
     kind: z.literal(AuthStrategyKind.LOGIN_FLOW),
     loginRequest: authHttpRequestSchema,
     tokenExtraction: z.object({
-      kind: z.literal("JSON_PATH"),
+      kind: z.literal('JSON_PATH'),
       path: z.string().min(1),
     }),
-    applyAs: z.enum(["BEARER_TOKEN", "HEADER"]),
+    applyAs: z.enum(['BEARER_TOKEN', 'HEADER']),
   }),
 ]);
 
@@ -127,7 +127,7 @@ export const newTestCaseSchema = z.object({
     environment: z.string().min(1),
   }),
   authStrategy: authStrategySchema,
-  loadProfile: z.discriminatedUnion("mode", [
+  loadProfile: z.discriminatedUnion('mode', [
     constantLoadProfileSchema,
     rampLoadProfileSchema,
   ]),

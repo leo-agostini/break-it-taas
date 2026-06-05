@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test';
+import { ValidationError } from '@/domain/errors/custom-errors';
 import {
   ExecutionPolicy,
   ResourceProfile,
 } from '@/domain/vos/execution-policy';
-import { ValidationError } from '@/domain/errors/custom-errors';
 
 describe('ExecutionPolicy VO', () => {
   it('creates with valid values', () => {

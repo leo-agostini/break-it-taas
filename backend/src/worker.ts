@@ -1,6 +1,6 @@
 import { OutboxDispatcherWorker } from '@/application/workers/outbox-dispatcher-worker';
-import { db } from '@/infra/db/knex';
 import { env } from '@/infra/config/env';
+import { db } from '@/infra/db/knex';
 import { KnexOutboxRepository } from '@/infra/db/repositories/knex-outbox-repository';
 import { KnexTestCaseRepository } from '@/infra/db/repositories/knex-test-case-repository';
 import { KnexTestRunRepository } from '@/infra/db/repositories/knex-test-run-repository';

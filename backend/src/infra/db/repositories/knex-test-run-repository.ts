@@ -1,8 +1,8 @@
-import type { Knex } from 'knex';
 import type { TransactionContext } from '@/application/ports/unit-of-work';
 import type { TestRunRepository } from '@/application/repositories/test-run-repository';
-import { TestRun, TestRunStatus } from '@/domain/entities/test-run';
+import { TestRun, type TestRunStatus } from '@/domain/entities/test-run';
 import { db } from '@/infra/db/knex';
+import type { Knex } from 'knex';
 
 type TestRunRow = {
   id: UUID;
@@ -56,7 +56,9 @@ export class KnexTestRunRepository implements TestRunRepository {
   }
 
   async find(testRunId: UUID): Promise<TestRun | undefined> {
-    const row = await db<TestRunRow>(TEST_RUNS_TABLE).where({ id: testRunId }).first();
+    const row = await db<TestRunRow>(TEST_RUNS_TABLE)
+      .where({ id: testRunId })
+      .first();
     if (!row) return undefined;
     return toEntity(row);
   }

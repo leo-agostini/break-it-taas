@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
-import { LoginUserUseCase } from '@/application/use-cases/login-user';
+import { JwtAuthService } from '@/application/services/jwt-auth';
 import { CreateUserUseCase } from '@/application/use-cases/create-user';
+import { LoginUserUseCase } from '@/application/use-cases/login-user';
 import { AuthenticationError } from '@/domain/errors/custom-errors';
+import { makeValidNewUserInput } from '@/tests/fixtures/user-fixtures';
 import { InMemoryUnitOfWork } from '@/tests/mocks/in-memory-unit-of-work';
 import { InMemoryUserRepository } from '@/tests/mocks/in-memory-user-repository';
-import { makeValidNewUserInput } from '@/tests/fixtures/user-fixtures';
-import { JwtAuthService } from '@/application/services/jwt-auth';
 
 describe('LoginUserUseCase', () => {
   const userRepository = new InMemoryUserRepository();

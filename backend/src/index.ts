@@ -1,12 +1,12 @@
-import { Elysia } from 'elysia';
-import { swagger } from '@elysiajs/swagger';
 import { mapErrorToHttp } from '@/application/errors/http-error-mapper';
-import { db } from '@/infra/db/knex';
 import { env } from '@/infra/config/env';
+import { db } from '@/infra/db/knex';
 import { createContainer } from '@/infra/http/container';
 import { createInternalRoutes } from '@/infra/http/routes/internal-routes';
 import { createProtectedRoutes } from '@/infra/http/routes/protected-routes';
 import { createPublicRoutes } from '@/infra/http/routes/public-routes';
+import { swagger } from '@elysiajs/swagger';
+import { Elysia } from 'elysia';
 
 const container = createContainer();
 
@@ -40,13 +40,15 @@ const app = new Elysia()
   )
   .options('*', ({ set, request }) => {
     const requestOrigin = request.headers.get('origin');
-    const allowOrigin = env.CORS_ORIGIN === '*' && requestOrigin
-      ? requestOrigin
-      : env.CORS_ORIGIN;
+    const allowOrigin =
+      env.CORS_ORIGIN === '*' && requestOrigin
+        ? requestOrigin
+        : env.CORS_ORIGIN;
 
     set.headers['Access-Control-Allow-Origin'] = allowOrigin;
     set.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS';
-    set.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Cookie';
+    set.headers['Access-Control-Allow-Headers'] =
+      'Content-Type,Authorization,Cookie';
     set.headers['Access-Control-Allow-Credentials'] = 'true';
     set.headers.Vary = 'Origin';
     set.status = 204;
@@ -54,14 +56,16 @@ const app = new Elysia()
   })
   .onAfterHandle(({ set, request }) => {
     const requestOrigin = request.headers.get('origin');
-    const allowOrigin = env.CORS_ORIGIN === '*' && requestOrigin
-      ? requestOrigin
-      : env.CORS_ORIGIN;
+    const allowOrigin =
+      env.CORS_ORIGIN === '*' && requestOrigin
+        ? requestOrigin
+        : env.CORS_ORIGIN;
 
     set.headers['Access-Control-Allow-Origin'] = allowOrigin;
     set.headers.Vary = 'Origin';
     set.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS';
-    set.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,Cookie';
+    set.headers['Access-Control-Allow-Headers'] =
+      'Content-Type,Authorization,Cookie';
     set.headers['Access-Control-Allow-Credentials'] = 'true';
   })
   .onError(({ error, set }) => {

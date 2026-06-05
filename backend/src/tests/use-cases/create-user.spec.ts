@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import { CreateUserUseCase } from '@/application/use-cases/create-user';
 import { EmailAlreadyRegisteredError } from '@/domain/errors/custom-errors';
+import { makeValidNewUserInput } from '@/tests/fixtures/user-fixtures';
 import { InMemoryUnitOfWork } from '@/tests/mocks/in-memory-unit-of-work';
 import { InMemoryUserRepository } from '@/tests/mocks/in-memory-user-repository';
-import { makeValidNewUserInput } from '@/tests/fixtures/user-fixtures';
 
 describe('CreateUserUseCase', () => {
   const userRepository = new InMemoryUserRepository();

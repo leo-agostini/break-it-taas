@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import type { JwtStringExpiresIn } from '@/application/services/jwt-auth';
 import { ConfigurationError } from '@/domain/errors/custom-errors';
 
 const required = [
@@ -10,7 +11,9 @@ const required = [
 
 for (const key of required) {
   if (!process.env[key]) {
-    throw new ConfigurationError(`Missing required environment variable: ${key}`);
+    throw new ConfigurationError(
+      `Missing required environment variable: ${key}`,
+    );
   }
 }
 
@@ -19,8 +22,8 @@ export const env = {
   PORT: Number(process.env.PORT ?? 3001),
   JWT_SECRET: process.env.JWT_SECRET as string,
   JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET as string,
-  JWT_ACCESS_TTL: process.env.JWT_ACCESS_TTL ?? '15m',
-  JWT_REFRESH_TTL: process.env.JWT_REFRESH_TTL ?? '7d',
+  JWT_ACCESS_TTL: (process.env.JWT_ACCESS_TTL ?? '15m') as JwtStringExpiresIn,
+  JWT_REFRESH_TTL: (process.env.JWT_REFRESH_TTL ?? '7d') as JwtStringExpiresIn,
   COOKIE_SECURE: process.env.COOKIE_SECURE === 'true',
   COOKIE_SAMESITE: process.env.COOKIE_SAMESITE ?? 'Lax',
   COOKIE_DOMAIN: process.env.COOKIE_DOMAIN,

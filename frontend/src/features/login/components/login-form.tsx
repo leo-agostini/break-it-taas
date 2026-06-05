@@ -1,8 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import type { ComponentProps } from 'react';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -19,6 +14,11 @@ import {
   loginSchema,
 } from '@/features/login/schemas/login-schema';
 import { cn } from '@/lib/utils';
+import { zodResolver } from '@hookform/resolvers/zod';
+import type { ComponentProps } from 'react';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { Link, useNavigate } from 'react-router';
 
 export function LoginForm({ className, ...props }: ComponentProps<'form'>) {
   const navigate = useNavigate();

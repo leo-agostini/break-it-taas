@@ -1,16 +1,16 @@
-import { z } from 'zod';
 import type { UnitOfWork } from '@/application/ports/unit-of-work';
+import { normalizeK6ResultMetrics } from '@/application/projections/normalize-k6-result-metrics';
 import type { ResultRepository } from '@/application/repositories/result-repository';
 import type { TestCaseRepository } from '@/application/repositories/test-case-repository';
 import type { TestRunMetricsRepository } from '@/application/repositories/test-run-metrics-repository';
 import type { TestRunRepository } from '@/application/repositories/test-run-repository';
-import { normalizeK6ResultMetrics } from '@/application/projections/normalize-k6-result-metrics';
+import { TestRunStatus } from '@/domain/entities/test-run';
 import {
   InvariantViolationError,
   NotFoundError,
   ValidationError,
 } from '@/domain/errors/custom-errors';
-import { TestRunStatus } from '@/domain/entities/test-run';
+import { z } from 'zod';
 
 const callbackSchema = z.object({
   testRunId: z.string().uuid(),

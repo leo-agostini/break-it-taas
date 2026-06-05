@@ -1,7 +1,8 @@
 import knex from 'knex';
 import config from '../../../knexfile';
 
-const env = process.env.NODE_ENV === 'production' ? 'development' : 'development';
+const env =
+  process.env.NODE_ENV === 'production' ? 'development' : 'development';
 
 async function run(): Promise<void> {
   const command = process.argv[2] ?? 'up';

@@ -1,11 +1,11 @@
-import type { V1Job } from '@kubernetes/client-node';
 import { createHmac } from 'node:crypto';
 import type { TestRunQueue } from '@/application/ports/test-run-queue';
 import type { TestCase } from '@/domain/entities/test-case';
-import { ResourceProfile } from '@/domain/vos/execution-policy';
 import type { TestRun } from '@/domain/entities/test-run';
+import { ResourceProfile } from '@/domain/vos/execution-policy';
 import { env } from '@/infra/config/env';
 import { KubernetesJobClient } from '@/infra/k8s/kubernetes-job-client';
+import type { V1Job } from '@kubernetes/client-node';
 
 export class K3sTestRunQueue implements TestRunQueue {
   constructor(private readonly jobClient = new KubernetesJobClient()) {}
@@ -60,7 +60,11 @@ export class K3sTestRunQueue implements TestRunQueue {
     }
   }
 
-  private buildJobManifest(run: TestRun, testCase: TestCase, jobName: string): V1Job {
+  private buildJobManifest(
+    run: TestRun,
+    testCase: TestCase,
+    jobName: string,
+  ): V1Job {
     const runConfig = this.buildRunnerConfig(run, testCase);
     const runConfigJson = JSON.stringify(runConfig);
     const runConfigHmac = this.signConfig(runConfigJson);

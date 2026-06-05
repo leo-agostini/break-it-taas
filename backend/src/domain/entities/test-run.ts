@@ -1,5 +1,5 @@
-import { randomUUIDv7 } from 'bun';
 import { InvariantViolationError } from '@/domain/errors/custom-errors';
+import { randomUUIDv7 } from 'bun';
 
 export enum TestRunStatus {
   CREATED = 'CREATED',

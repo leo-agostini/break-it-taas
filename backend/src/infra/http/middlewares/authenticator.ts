@@ -1,6 +1,6 @@
-import { env } from '@/infra/config/env';
-import { AuthenticationError } from '@/domain/errors/custom-errors';
 import { JwtAuthService } from '@/application/services/jwt-auth';
+import { AuthenticationError } from '@/domain/errors/custom-errors';
+import { env } from '@/infra/config/env';
 import { authCookieNames, getCookieValue } from '@/infra/http/cookies';
 
 export interface AuthContext {
@@ -34,7 +34,9 @@ export function authenticateRequest(args: {
   }
   const [scheme, token] = authorizationHeader.split(' ');
   if (scheme !== 'Bearer' || !token) {
-    throw new AuthenticationError('Authorization header must use Bearer token format');
+    throw new AuthenticationError(
+      'Authorization header must use Bearer token format',
+    );
   }
   const claims = jwtAuthService.verifyAccessToken(token);
 

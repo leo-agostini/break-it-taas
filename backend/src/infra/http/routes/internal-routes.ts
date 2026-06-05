@@ -1,8 +1,8 @@
-import { Elysia } from 'elysia';
-import type { AppContainer } from '@/infra/http/container';
-import { env } from '@/infra/config/env';
-import { verifyRunnerCallbackSignature } from '@/infra/http/security/runner-callback-signature';
 import { ValidationError } from '@/domain/errors/custom-errors';
+import { env } from '@/infra/config/env';
+import type { AppContainer } from '@/infra/http/container';
+import { verifyRunnerCallbackSignature } from '@/infra/http/security/runner-callback-signature';
+import { Elysia } from 'elysia';
 
 export function createInternalRoutes(container: AppContainer) {
   return new Elysia({ prefix: '/api/internal' }).post(
@@ -25,9 +25,8 @@ export function createInternalRoutes(container: AppContainer) {
         throw new ValidationError('Runner callback body must be valid JSON');
       }
 
-      const result = await container.completeTestRunFromCallbackUseCase.execute(
-        payload,
-      );
+      const result =
+        await container.completeTestRunFromCallbackUseCase.execute(payload);
 
       return {
         status: 'accepted',

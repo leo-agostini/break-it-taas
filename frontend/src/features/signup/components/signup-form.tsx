@@ -1,8 +1,3 @@
-import { zodResolver } from '@hookform/resolvers/zod';
-import type { ComponentProps } from 'react';
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -18,6 +13,11 @@ import {
   signupSchema,
 } from '@/features/signup/schemas/signup-schema';
 import { cn } from '@/lib/utils';
+import { zodResolver } from '@hookform/resolvers/zod';
+import type { ComponentProps } from 'react';
+import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { Link, useNavigate } from 'react-router';
 
 export function SignupForm({ className, ...props }: ComponentProps<'form'>) {
   const navigate = useNavigate();
@@ -48,7 +48,11 @@ export function SignupForm({ className, ...props }: ComponentProps<'form'>) {
 
   return (
     <Card className="w-full p-6">
-      <form className={cn('flex flex-col gap-6', className)} onSubmit={onSubmit} {...props}>
+      <form
+        className={cn('flex flex-col gap-6', className)}
+        onSubmit={onSubmit}
+        {...props}
+      >
         <FieldGroup>
           <div className="flex flex-col items-center gap-1 text-center">
             <h1 className="text-2xl font-bold">Create your account</h1>
@@ -69,7 +73,11 @@ export function SignupForm({ className, ...props }: ComponentProps<'form'>) {
 
           <Field>
             <FieldLabel htmlFor="nickname">Nickname</FieldLabel>
-            <Input id="nickname" placeholder="alice" {...form.register('nickname')} />
+            <Input
+              id="nickname"
+              placeholder="alice"
+              {...form.register('nickname')}
+            />
             {form.formState.errors.nickname ? (
               <FieldDescription className="text-destructive">
                 {form.formState.errors.nickname.message}
@@ -79,7 +87,11 @@ export function SignupForm({ className, ...props }: ComponentProps<'form'>) {
 
           <Field>
             <FieldLabel htmlFor="photoUrl">Photo URL (optional)</FieldLabel>
-            <Input id="photoUrl" placeholder="https://example.com/photo.png" {...form.register('photoUrl')} />
+            <Input
+              id="photoUrl"
+              placeholder="https://example.com/photo.png"
+              {...form.register('photoUrl')}
+            />
             {form.formState.errors.photoUrl ? (
               <FieldDescription className="text-destructive">
                 {form.formState.errors.photoUrl.message}
@@ -89,7 +101,12 @@ export function SignupForm({ className, ...props }: ComponentProps<'form'>) {
 
           <Field>
             <FieldLabel htmlFor="email">Email</FieldLabel>
-            <Input id="email" type="email" placeholder="m@example.com" {...form.register('email')} />
+            <Input
+              id="email"
+              type="email"
+              placeholder="m@example.com"
+              {...form.register('email')}
+            />
             {form.formState.errors.email ? (
               <FieldDescription className="text-destructive">
                 {form.formState.errors.email.message}
@@ -99,7 +116,11 @@ export function SignupForm({ className, ...props }: ComponentProps<'form'>) {
 
           <Field>
             <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Input id="password" type="password" {...form.register('password')} />
+            <Input
+              id="password"
+              type="password"
+              {...form.register('password')}
+            />
             {form.formState.errors.password ? (
               <FieldDescription className="text-destructive">
                 {form.formState.errors.password.message}
@@ -114,7 +135,11 @@ export function SignupForm({ className, ...props }: ComponentProps<'form'>) {
           ) : null}
 
           <Field>
-            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={form.formState.isSubmitting}
+            >
               {form.formState.isSubmitting ? 'Creating account...' : 'Sign up'}
             </Button>
           </Field>

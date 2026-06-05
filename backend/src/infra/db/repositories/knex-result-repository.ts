@@ -1,8 +1,8 @@
-import { randomUUIDv7 } from 'bun';
-import type { Knex } from 'knex';
 import type { TransactionContext } from '@/application/ports/unit-of-work';
 import type { ResultRepository } from '@/application/repositories/result-repository';
 import { db } from '@/infra/db/knex';
+import { randomUUIDv7 } from 'bun';
+import type { Knex } from 'knex';
 
 type ResultRow = {
   id: UUID;

@@ -1,5 +1,5 @@
-import type { TransactionContext } from "@/application/ports/unit-of-work";
-import type { OutboxEvent } from "@/domain/entities/outbox-event";
+import type { TransactionContext } from '@/application/ports/unit-of-work';
+import type { OutboxEvent } from '@/domain/entities/outbox-event';
 
 export interface OutboxRepository {
   enqueue(event: OutboxEvent, tx?: TransactionContext): Promise<void>;

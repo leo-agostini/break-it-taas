@@ -1,8 +1,8 @@
-import knex, { type Knex } from "knex";
-import { env } from "@/infra/config/env";
+import { env } from '@/infra/config/env';
+import knex, { type Knex } from 'knex';
 
 const config: Knex.Config = {
-  client: "pg",
+  client: 'pg',
   connection: env.DATABASE_URL,
   pool: {
     min: 2,

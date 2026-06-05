@@ -1,5 +1,5 @@
-import type { TestRun } from '@/domain/entities/test-run';
 import type { TransactionContext } from '@/application/ports/unit-of-work';
+import type { TestRun } from '@/domain/entities/test-run';
 
 export interface TestRunRepository {
   save(testRun: TestRun, tx?: TransactionContext): Promise<void>;

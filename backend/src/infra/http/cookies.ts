@@ -25,10 +25,14 @@ function parseMaxAgeSeconds(ttl: string, fallbackSeconds: number): number {
   return value * 60 * 60 * 24;
 }
 
-function serializeCookie(name: string, value: string, options: {
-  maxAge: number;
-  path: string;
-}) {
+function serializeCookie(
+  name: string,
+  value: string,
+  options: {
+    maxAge: number;
+    path: string;
+  },
+) {
   const normalizedSameSite = env.COOKIE_SAMESITE;
   const shouldUseSecure =
     env.COOKIE_SECURE || normalizedSameSite.toLowerCase() === 'none';

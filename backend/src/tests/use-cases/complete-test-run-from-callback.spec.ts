@@ -1,10 +1,17 @@
 import { describe, expect, it } from 'bun:test';
 import { CompleteTestRunFromCallbackUseCase } from '@/application/use-cases/complete-test-run-from-callback';
-import { TestCase, TestCaseOwnerType, TestType } from '@/domain/entities/test-case';
+import {
+  TestCase,
+  TestCaseOwnerType,
+  TestType,
+} from '@/domain/entities/test-case';
 import { TestRun, TestRunStatus } from '@/domain/entities/test-run';
 import { ValidationError } from '@/domain/errors/custom-errors';
 import { AuthStrategyKind } from '@/domain/vos/auth-strategy';
-import { ExecutionPolicy, ResourceProfile } from '@/domain/vos/execution-policy';
+import {
+  ExecutionPolicy,
+  ResourceProfile,
+} from '@/domain/vos/execution-policy';
 import { LoadMode, LoadProfile, TimeUnit } from '@/domain/vos/load-profile';
 import { CheckKind, HttpMethod, Step } from '@/domain/vos/step';
 import { TargetSystem } from '@/domain/vos/target-system';
@@ -29,9 +36,19 @@ function makeTestCase(ownerId: UUID) {
       targetRate: 5000,
       timeUnit: TimeUnit.SECONDS,
     }),
-    thresholdPolicy: new ThresholdPolicy(undefined, undefined, undefined, undefined, false),
+    thresholdPolicy: new ThresholdPolicy(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+    ),
     executionPolicy: new ExecutionPolicy(ResourceProfile.LARGE, 120),
-    steps: [new Step('/', HttpMethod.GET, [{ kind: CheckKind.STATUS_CODE, expected: 200 }])],
+    steps: [
+      new Step('/', HttpMethod.GET, [
+        { kind: CheckKind.STATUS_CODE, expected: 200 },
+      ]),
+    ],
   });
 }
 
@@ -65,7 +82,11 @@ describe('CompleteTestRunFromCallbackUseCase', () => {
             http_reqs: { rate: 522.85, count: 11992 },
             dropped_iterations: { count: 88010 },
             http_req_failed: { value: 0.8445 },
-            http_req_duration: { 'p(95)': 3000.8222375, 'p(99)': 3200.51234, med: 1987.21239 },
+            http_req_duration: {
+              'p(95)': 3000.8222375,
+              'p(99)': 3200.51234,
+              med: 1987.21239,
+            },
             http_req_waiting: { 'p(95)': 3000.788899 },
             vus: { value: 1500 },
             vus_max: { value: 1500 },
