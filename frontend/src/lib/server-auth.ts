@@ -1,7 +1,7 @@
 import {
   createServerCheckHttpClient,
   createServerPrivateHttpClient,
-  publicHttpClient,
+  createServerPublicHttpClient,
 } from '@/lib/httpClient';
 import { isAxiosError } from 'axios';
 import { redirect } from 'react-router';
@@ -23,11 +23,8 @@ export async function requireServerAuth(request: Request) {
   }
 
   try {
-    await publicHttpClient.post('/auth/refresh', undefined, {
-      headers: {
-        Cookie: request.headers.get('cookie') ?? '',
-      },
-    });
+    const publicClient = createServerPublicHttpClient(request);
+    await publicClient.post('/auth/refresh');
 
     await privateClient.get('/auth/check');
   } catch {

@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
+source "$(dirname "$0")/../lib.sh"
 
-WORKLOAD_CONTEXT="${WORKLOAD_CONTEXT:-k3d-workload}"
-DATA_NAMESPACE="${DATA_NAMESPACE:-data}"
+POSTGRES_DB="${POSTGRES_DB:-app}"
+POSTGRES_USER="${POSTGRES_USER:-postgres}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-postgres}"
 
-POSTGRES_DB="${POSTGRES_DB:-taas}"
-POSTGRES_USER="${POSTGRES_USER:-appuser}"
-POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-apppassword}"
-
-kubectl --context "${WORKLOAD_CONTEXT}" -n "${DATA_NAMESPACE}" create secret generic postgres-auth \
+kube -n "${DATA_NAMESPACE}" create secret generic postgres-auth \
   --from-literal=POSTGRES_DB="${POSTGRES_DB}" \
   --from-literal=POSTGRES_USER="${POSTGRES_USER}" \
   --from-literal=POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
-  --dry-run=client -o yaml | kubectl --context "${WORKLOAD_CONTEXT}" apply -f -
+  --dry-run=client -o yaml | kube apply -f -
 
-echo "Applied postgres-auth secret in namespace '${DATA_NAMESPACE}'"
+log "Applied postgres-auth secret in namespace '${DATA_NAMESPACE}'"

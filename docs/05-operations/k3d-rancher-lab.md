@@ -86,7 +86,7 @@ curl http://api.127.0.0.1.sslip.io:8080/api/health
 4) Rodar teste de integracao end-to-end (signup -> signin -> test case -> run -> pod -> callback):
 
 ```bash
-bun --cwd backend run test:integration:k3s
+bun --cwd backend run test:integration:k3s:cluster
 ```
 
 Observacao: o Deployment `backend` roda com `replicas: 2` e o Service `backend` distribui trafego entre os pods saudaveis.
@@ -111,6 +111,6 @@ kubectl --context k3d-workload logs -f job/postgres-restore-check -n data
 ## Observacoes importantes
 
 - O `postgres-auth` em `ops/k8s/data/postgres.yaml` vem com credenciais padrao para ambiente local. Troque antes de usar em ambiente remoto.
-- O banco local padrao configurado neste lab e `taas`.
+- O banco local padrao configurado neste lab e `app`, com usuario `postgres` e senha `postgres`.
 - O backup atual grava em PVC (`postgres-backups`). Para maior paridade com producao, migrar para MinIO/S3 na proxima iteracao.
 - O hostname do Rancher usa `sslip.io` com gateway Docker para evitar workaround com `hostAliases`.

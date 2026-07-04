@@ -24,7 +24,12 @@ services:
             - NODE_ENV=production
             - PORT=3001
             - JWT_SECRET=change-me-in-production
-            - K3S_QUEUE_ENDPOINT=http://k3s-queue:8080/enqueue
+            - JWT_REFRESH_SECRET=change-me-refresh-in-production
+            - RUNNER_SHARED_SECRET=local-runner-shared-secret
+            - RUNNER_CALLBACK_BASE_URL=http://localhost:3001
+            - RUNNER_IMAGE=breakit-k6-runner:local
+            - K3S_NAMESPACE=app
+            - K3S_QUEUE_ENDPOINT=
             - DATABASE_URL=postgres://postgres:postgres@postgres:5432/app
         depends_on:
             migrate:
@@ -38,7 +43,12 @@ services:
         environment:
             - NODE_ENV=production
             - JWT_SECRET=change-me-in-production
-            - K3S_QUEUE_ENDPOINT=http://k3s-queue:8080/enqueue
+            - JWT_REFRESH_SECRET=change-me-refresh-in-production
+            - RUNNER_SHARED_SECRET=local-runner-shared-secret
+            - RUNNER_CALLBACK_BASE_URL=http://localhost:3001
+            - RUNNER_IMAGE=breakit-k6-runner:local
+            - K3S_NAMESPACE=app
+            - K3S_QUEUE_ENDPOINT=
             - DATABASE_URL=postgres://postgres:postgres@postgres:5432/app
         command: ["bun", "run", "src/worker.ts"]
         depends_on:

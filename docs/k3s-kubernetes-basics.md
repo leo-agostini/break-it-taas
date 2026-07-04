@@ -141,6 +141,8 @@ Why this matters:
 
 ## 4) What the shell scripts do
 
+All k8s scripts source `ops/lib.sh`, which sets common defaults (`WORKLOAD_CONTEXT`, `APP_NAMESPACE`, `DATA_NAMESPACE`, `WORKLOAD_CLUSTER_NAME`) and provides a `kube()` shorthand for `kubectl --context "${WORKLOAD_CONTEXT}"`. Override any default by exporting the variable before running a script. All scripts should be run from the repository root.
+
 ## `ops/k3d/bootstrap-mgmt.sh`
 Purpose: create management cluster and install Rancher stack.
 
@@ -160,7 +162,7 @@ Steps:
 3. apply Rancher import manifest (`RANCHER_IMPORT_URL`)
 4. wait cluster-agent rollout
 
-## `ops/k8s/apply-phase-3-5.sh`
+## `ops/k8s/setup-data-layer.sh`
 Purpose: bootstrap platform and data essentials.
 
 Steps:
@@ -251,7 +253,7 @@ Finds latest `testrun-*` pod quickly.
 
 ## Database checks
 ```bash
-kubectl --context k3d-workload -n data exec statefulset/postgres -- psql -U appuser -d taas -c "\dt"
+kubectl --context k3d-workload -n data exec statefulset/postgres -- psql -U postgres -d app -c "\dt"
 ```
 Shows DB tables.
 

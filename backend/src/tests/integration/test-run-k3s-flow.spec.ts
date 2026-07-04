@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 
-const baseUrl =
-  process.env.INTEGRATION_BASE_URL ?? 'http://api.127.0.0.1.sslip.io:8080';
+const baseUrl = process.env.INTEGRATION_BASE_URL ?? 'http://localhost:3001';
 const kubeContext =
   process.env.INTEGRATION_KUBECONFIG_CONTEXT ?? 'k3d-workload';
 const dbNamespace = process.env.INTEGRATION_DB_NAMESPACE ?? 'data';
 const dbStatefulSet = process.env.INTEGRATION_DB_STATEFULSET ?? 'postgres';
-const dbName = process.env.INTEGRATION_DB_NAME ?? 'taas';
-const dbUser = process.env.INTEGRATION_DB_USER ?? 'appuser';
+const dbName = process.env.INTEGRATION_DB_NAME ?? 'app';
+const dbUser = process.env.INTEGRATION_DB_USER ?? 'postgres';
 const targetNamespace = process.env.INTEGRATION_TARGET_NAMESPACE ?? 'app';
 const targetLabelSelector =
   process.env.INTEGRATION_TARGET_LABEL_SELECTOR ?? 'app=load-target';
@@ -115,9 +114,16 @@ async function signin(email: string) {
     body: JSON.stringify({ email, password: 'StrongPass!2345' }),
   });
   expect(response.status).toBe(200);
-  const payload = (await response.json()) as { token: string };
-  expect(payload.token.length).toBeGreaterThan(10);
-  return payload.token;
+  const accessCookie = response.headers
+    .getSetCookie()
+    .find((c) => c.startsWith('access_token='));
+  const token = accessCookie
+    ? decodeURIComponent(
+        accessCookie.split(';')[0].slice('access_token='.length),
+      )
+    : '';
+  expect(token.length).toBeGreaterThan(10);
+  return token;
 }
 
 async function createTestCase(token: string, ownerId: string) {

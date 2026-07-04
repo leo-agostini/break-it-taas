@@ -30,6 +30,11 @@ spec:
                 secretKeyRef:
                   name: app-env
                   key: JWT_SECRET
+            - name: JWT_REFRESH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: app-env
+                  key: JWT_REFRESH_SECRET
             - name: K3S_QUEUE_ENDPOINT
               valueFrom:
                 configMapKeyRef:

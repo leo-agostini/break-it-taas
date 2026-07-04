@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname "$0")/../lib.sh"
+
+POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
+POSTGRES_PORT_FORWARD="${POSTGRES_PORT_FORWARD:-5432}"
+POSTGRES_SERVICE_PORT="${POSTGRES_SERVICE_PORT:-5432}"
+
+log "Forwarding ${DATA_NAMESPACE}/${POSTGRES_SERVICE} to localhost:${POSTGRES_PORT_FORWARD}"
+kube -n "${DATA_NAMESPACE}" port-forward "svc/${POSTGRES_SERVICE}" "${POSTGRES_PORT_FORWARD}:${POSTGRES_SERVICE_PORT}"

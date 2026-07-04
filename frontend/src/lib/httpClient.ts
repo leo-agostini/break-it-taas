@@ -4,7 +4,8 @@ import axios, {
   type AxiosRequestConfig,
 } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
+const API_SERVER_BASE_URL = import.meta.env.VITE_API_SERVER_URL ?? API_BASE_URL;
 
 type RetriableRequestConfig = AxiosRequestConfig & {
   _retry?: boolean;
@@ -74,12 +75,30 @@ export const privateHttpClient = axios.create({
 
 attachRefreshInterceptor(privateHttpClient, refreshHttpClient);
 
+function resolveServerBaseUrl(request: Request) {
+  const requestUrl = new URL(request.url);
+
+  return API_SERVER_BASE_URL.startsWith('http')
+    ? API_SERVER_BASE_URL
+    : `${requestUrl.origin}${API_SERVER_BASE_URL}`;
+}
+
+export function createServerPublicHttpClient(request: Request) {
+  const cookieHeader = request.headers.get('cookie') ?? '';
+
+  return axios.create({
+    baseURL: resolveServerBaseUrl(request),
+    withCredentials: true,
+    headers: {
+      'Content-Type': 'application/json',
+      Cookie: cookieHeader,
+    },
+  });
+}
+
 export function createServerPrivateHttpClient(request: Request) {
   const cookieHeader = request.headers.get('cookie') ?? '';
-  const requestUrl = new URL(request.url);
-  const resolvedBaseUrl = API_BASE_URL.startsWith('http')
-    ? API_BASE_URL
-    : `${requestUrl.origin}${API_BASE_URL}`;
+  const resolvedBaseUrl = resolveServerBaseUrl(request);
 
   const serverRefreshClient = axios.create({
     baseURL: resolvedBaseUrl,
@@ -105,13 +124,9 @@ export function createServerPrivateHttpClient(request: Request) {
 
 export function createServerCheckHttpClient(request: Request) {
   const cookieHeader = request.headers.get('cookie') ?? '';
-  const requestUrl = new URL(request.url);
-  const resolvedBaseUrl = API_BASE_URL.startsWith('http')
-    ? API_BASE_URL
-    : `${requestUrl.origin}${API_BASE_URL}`;
 
   return axios.create({
-    baseURL: resolvedBaseUrl,
+    baseURL: resolveServerBaseUrl(request),
     withCredentials: true,
     headers: {
       'Content-Type': 'application/json',

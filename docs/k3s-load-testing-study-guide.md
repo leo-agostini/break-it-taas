@@ -127,7 +127,7 @@ Why: ensure node-level resources are not globally exhausted.
 
 ### Database Verification
 ```bash
-kubectl --context k3d-workload -n data exec statefulset/postgres -- psql -U appuser -d taas -c "select * from test_run_metrics order by updated_at desc limit 1;"
+kubectl --context k3d-workload -n data exec statefulset/postgres -- psql -U postgres -d app -c "select * from test_run_metrics order by updated_at desc limit 1;"
 ```
 Why: verify normalized CQRS projection persisted correctly.
 

@@ -31,8 +31,12 @@ export const env = {
   K3S_QUEUE_ENDPOINT: process.env.K3S_QUEUE_ENDPOINT ?? '',
   RUNNER_SHARED_SECRET: process.env.RUNNER_SHARED_SECRET as string,
   RUNNER_CALLBACK_BASE_URL: process.env.RUNNER_CALLBACK_BASE_URL as string,
-  RUNNER_IMAGE: process.env.RUNNER_IMAGE ?? 'breakit-runner:local',
+  RUNNER_IMAGE: process.env.RUNNER_IMAGE ?? 'breakit-k6-runner:local',
   K3S_NAMESPACE: process.env.K3S_NAMESPACE ?? 'app',
+  KUBERNETES_CONTEXT:
+    process.env.KUBERNETES_CONTEXT ??
+    process.env.INTEGRATION_KUBECONFIG_CONTEXT ??
+    'k3d-workload',
   DATABASE_URL:
     process.env.DATABASE_URL ??
     'postgres://postgres:postgres@localhost:5432/app',
