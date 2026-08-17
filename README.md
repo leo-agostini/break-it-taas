@@ -391,7 +391,11 @@ Project documentation is under `docs/`:
 
 Useful references:
 
+- `docs/02-architecture/backend-architecture.md`
+- `docs/02-architecture/frontend-architecture.md`
 - `docs/05-operations/k3d-rancher-lab.md`
-- `docs/k3s-kubernetes-basics.md`
-- `docs/k3s-load-testing-study-guide.md`
+- `docs/05-operations/k3s-kubernetes-basics.md`
+- `docs/05-operations/k3s-load-testing-study-guide.md`
 - `backend/docs/outbox-worker-spec.md`
+
+AI agent instructions (Claude Code and others) live in `CLAUDE.md` at the repo root, which references the project skills in `.claude/skills/`.
