@@ -4,7 +4,11 @@ import { CompleteTestRunFromCallbackUseCase } from '@/application/use-cases/comp
 import { CreateNewTestCaseUseCase } from '@/application/use-cases/create-new-test-case';
 import { CreateNewTestRunUseCase } from '@/application/use-cases/create-new-test-run';
 import { CreateUserUseCase } from '@/application/use-cases/create-user';
+import { GetTestCaseUseCase } from '@/application/use-cases/get-test-case';
+import { GetTestRunUseCase } from '@/application/use-cases/get-test-run';
 import { GetTestRunReportUseCase } from '@/application/use-cases/get-test-run-report';
+import { ListTestCaseRunsUseCase } from '@/application/use-cases/list-test-case-runs';
+import { ListTestCasesUseCase } from '@/application/use-cases/list-test-cases';
 import { LoginUserUseCase } from '@/application/use-cases/login-user';
 import { RefreshTokenUseCase } from '@/application/use-cases/refresh-token';
 import { env } from '@/infra/config/env';
@@ -58,6 +62,17 @@ export function createContainer() {
     getTestRunReportUseCase: new GetTestRunReportUseCase(
       testRunMetricsRepository,
     ),
+    listTestCasesUseCase: new ListTestCasesUseCase(
+      testCaseRepository,
+      testRunRepository,
+    ),
+    getTestCaseUseCase: new GetTestCaseUseCase(testCaseRepository),
+    listTestCaseRunsUseCase: new ListTestCaseRunsUseCase(
+      testCaseRepository,
+      testRunRepository,
+      testRunMetricsRepository,
+    ),
+    getTestRunUseCase: new GetTestRunUseCase(testRunRepository),
   };
 }
 

@@ -10,12 +10,28 @@ function isUnauthorized(error: unknown) {
   return isAxiosError(error) && error.response?.status === 401;
 }
 
-export async function requireServerAuth(request: Request) {
+export interface AuthenticatedUser {
+  id: string;
+  orgId: string | null;
+}
+
+interface AuthCheckResponse {
+  authenticated: boolean;
+  user: AuthenticatedUser;
+}
+
+/**
+ * Guards a protected route's loader and returns the authenticated actor, so a
+ * caller that needs the user does not have to hit `/auth/check` a second time.
+ */
+export async function requireServerAuth(
+  request: Request,
+): Promise<AuthenticatedUser> {
   const privateClient = createServerPrivateHttpClient(request);
 
   try {
-    await privateClient.get('/auth/check');
-    return;
+    const response = await privateClient.get<AuthCheckResponse>('/auth/check');
+    return response.data.user;
   } catch (error) {
     if (!isUnauthorized(error)) {
       throw error;
@@ -26,7 +42,8 @@ export async function requireServerAuth(request: Request) {
     const publicClient = createServerPublicHttpClient(request);
     await publicClient.post('/auth/refresh');
 
-    await privateClient.get('/auth/check');
+    const response = await privateClient.get<AuthCheckResponse>('/auth/check');
+    return response.data.user;
   } catch {
     throw redirect('/login');
   }
@@ -34,10 +51,8 @@ export async function requireServerAuth(request: Request) {
 
 export async function redirectIfAuthenticated(request: Request) {
   const checkClient = createServerCheckHttpClient(request);
-  console.log('checkClient', checkClient);
   try {
-    const response = await checkClient.get('/auth/check');
-    console.log('RESPONSE', response);
+    await checkClient.get('/auth/check');
   } catch (error) {
     if (isUnauthorized(error)) {
       return;

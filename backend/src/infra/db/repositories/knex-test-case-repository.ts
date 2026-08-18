@@ -146,6 +146,26 @@ export class KnexTestCaseRepository implements TestCaseRepository {
     return toEntity(row);
   }
 
+  async listOwnedByActor(args: {
+    actorUserId: UUID;
+    actorOrgId: UUID | null;
+  }): Promise<TestCase[]> {
+    const rows = await db<TestCaseRow>(TEST_CASES_TABLE)
+      .where((query) => {
+        query
+          .where('owner_type', TestCaseOwnerType.USER)
+          .where('owner_id', args.actorUserId)
+          .orWhere((ownerQuery) => {
+            ownerQuery
+              .where('owner_type', TestCaseOwnerType.ORGANIZATION)
+              .where('owner_id', args.actorOrgId);
+          });
+      })
+      .orderBy('created_at', 'desc');
+
+    return rows.map(toEntity);
+  }
+
   async create(testCase: TestCase, tx?: TransactionContext): Promise<void> {
     const conn = contextOrDb(tx);
 

@@ -5,9 +5,7 @@
 ## Princípios
 
 - **Feature-based / vertical slice**: cada funcionalidade é uma fatia vertical autocontida em `src/features/<feature>/`, com sua própria camada de dados, estado e apresentação. Não existe uma camada horizontal global de "services" ou "state" compartilhada entre features.
-- **Client-side only (SPA)**: não há renderização no servidor. Toda busca de dados acontece no navegador via SWR, contra a API do backend. Rotas do React Router funcionam apenas como composition root (URL → container), sem `loader`/`action` server-side.
-
-  > **Ação pendente**: `frontend/react-router.config.ts` está hoje com `ssr: true` e existe `src/entry.server.tsx`. Para alinhar com esta decisão, o projeto deve migrar para `ssr: false` (modo SPA do React Router 7) e remover `entry.server.tsx`. Isso não foi alterado neste documento — é um item de ação separado.
+- **SSR para a primeira carga, SWR para o resto**: o React Router 7 roda em modo SSR (`react-router.config.ts` tem `ssr: true`, mantido de propósito — ver seção "Autenticação e proteção de rota"). O `loader` de uma rota faz a primeira busca de dados no servidor (Node); depois da hidratação, a camada `hooks/` de cada feature usa SWR, semeado com o dado do `loader` via `fallbackData`, para revalidação e mutações no cliente. Nenhum componente busca dado direto do `api/` — só via `hooks/`. Ver "Padrão loader → SWR" abaixo.
 - **Dependência sempre de cima para baixo, nunca circular**: dentro de uma feature, cada camada só pode importar da camada imediatamente abaixo dela. Uma camada nunca importa de quem a chama. Ver seção "Regra de dependência".
 - **Componentes específicos de uma feature moram dentro da feature.** Só sobe para `src/components/` o que é genuinamente compartilhado por 2+ features (primitivos de UI, ex. `components/ui/*` no padrão shadcn).
 
@@ -82,9 +80,42 @@ lib/  →  components/ui (shared)  →  features/*  →  routes/
 
 Essa regra existe para impedir dependência circular: como cada seta aponta em uma única direção, é estruturalmente impossível ter um ciclo entre `lib/`, `components/ui/`, `features/*` e `routes/`, e o mesmo vale para as camadas dentro de uma feature.
 
-## Autenticação e estado de sessão
+## Padrão loader → SWR
 
-Hoje o cookie de sessão é lido no servidor (`src/lib/server-auth.ts`), o que só faz sentido em SSR. Ao migrar para SPA (`ssr: false`), a verificação de sessão passa a ser client-side: um hook (`hooks/use-session.ts`, sugerido em uma feature `auth` ou `session`) chama `GET /api/auth/check` via SWR e expõe o resultado por um átomo Recoil, para que rotas protegidas possam redirecionar no cliente.
+Quando uma rota precisa de dado real (não só um guard de autenticação), o `loader` busca no servidor e o hook da feature reidrata esse dado no cliente sem refazer o fetch na hidratação:
+
+```ts
+// routes/test-cases.tsx
+export async function loader({ request }: { request: Request }) {
+  await requireServerAuth(request);
+  const testCases = await fetchTestCasesServerSide(request); // via createServerPrivateHttpClient + mapper
+  return { testCases };
+}
+
+export default function TestCasesRoute({ loaderData }: Route.ComponentProps) {
+  return <TestCasesContainer initialData={loaderData.testCases} />;
+}
+```
+
+```ts
+// features/test-cases/hooks/use-test-cases.ts
+export function useTestCases(initialData?: TestCase[]) {
+  return useSWR('test-cases', fetchTestCases, { fallbackData: initialData });
+}
+```
+
+Isso evita o "flash" de loading na primeira renderização (o HTML já chega com o dado) e mantém o SWR como única fonte de revalidação/mutação depois disso.
+
+## Autenticação e proteção de rota
+
+O backend e o frontend são publicados em domínios públicos independentes (não há um hostname único compartilhado por um ingress). A sessão continua baseada em cookies `httpOnly` (`access_token`/`refresh_token`), sem que o frontend precise implementar lógica própria de refresh/proxy de token — a decisão completa e o tradeoff aceito estão em [ADR-004](../03-decisions/ADR-004-cross-domain-httponly-cookie-auth.md).
+
+Na prática:
+
+- `src/lib/httpClient.ts` já configura `withCredentials: true` em todas as instâncias axios (cliente e servidor) — é só isso que uma chamada cross-domain com cookie precisa do lado do frontend.
+- `src/lib/server-auth.ts` expõe `requireServerAuth(request)` e `redirectIfAuthenticated(request)` — o **middleware server-side** de proteção de rota. Cada um encaminha o header `Cookie` recebido do navegador para o backend via uma chamada Node-a-Node (`createServerPrivateHttpClient`/`createServerPublicHttpClient`/`createServerCheckHttpClient`), o que não sofre nenhuma restrição de CORS/SameSite — essas regras só existem para chamadas feitas pelo navegador.
+- Toda rota protegida chama `requireServerAuth` no `loader`, como em `routes/home.tsx`; toda rota só-para-anônimo (`login`, `signup`) chama `redirectIfAuthenticated`. Esse `loader` roda de novo a cada navegação — inclusive navegação client-side, que o React Router SSR resolve fazendo uma requisição ao servidor — então a proteção não é um check único na primeira carga.
+- Novas rotas protegidas seguem o mesmo padrão: chamar `requireServerAuth` (ou uma variante que também valide papel/permissão, se isso vier a ser necessário) no início do `loader`, antes de buscar qualquer dado.
 
 ## Convenções
 

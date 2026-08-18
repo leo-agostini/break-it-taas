@@ -34,4 +34,5 @@ export interface TestRunMetricsRepository {
     actorUserId: UUID;
     actorOrgId: UUID | null;
   }): Promise<TestRunMetricsReport | null>;
+  findByTestRunIds(testRunIds: UUID[]): Promise<TestRunMetricsProjection[]>;
 }

@@ -1,5 +1,6 @@
 import type { TransactionContext } from '@/application/ports/unit-of-work';
 import type { TestRunRepository } from '@/application/repositories/test-run-repository';
+import { TestCaseOwnerType } from '@/domain/entities/test-case';
 import { TestRun, type TestRunStatus } from '@/domain/entities/test-run';
 import { db } from '@/infra/db/knex';
 import type { Knex } from 'knex';
@@ -61,5 +62,53 @@ export class KnexTestRunRepository implements TestRunRepository {
       .first();
     if (!row) return undefined;
     return toEntity(row);
+  }
+
+  async findOwned(args: {
+    testRunId: UUID;
+    actorUserId: UUID;
+    actorOrgId: UUID | null;
+  }): Promise<TestRun | null> {
+    const row = await db<TestRunRow>(`${TEST_RUNS_TABLE} as tr`)
+      .join('test_cases as tc', 'tc.id', 'tr.test_case_id')
+      .where('tr.id', args.testRunId)
+      .andWhere((query) => {
+        query
+          .where('tc.owner_type', TestCaseOwnerType.USER)
+          .where('tc.owner_id', args.actorUserId)
+          .orWhere((ownerQuery) => {
+            ownerQuery
+              .where('tc.owner_type', TestCaseOwnerType.ORGANIZATION)
+              .where('tc.owner_id', args.actorOrgId);
+          });
+      })
+      .select('tr.*')
+      .first();
+
+    if (!row) return null;
+    return toEntity(row);
+  }
+
+  async findAllByTestCaseId(testCaseId: UUID): Promise<TestRun[]> {
+    const rows = await db<TestRunRow>(TEST_RUNS_TABLE)
+      .where({ test_case_id: testCaseId })
+      .orderBy('created_at', 'desc');
+
+    return rows.map(toEntity);
+  }
+
+  async countByTestCaseIds(testCaseIds: UUID[]): Promise<Record<UUID, number>> {
+    if (testCaseIds.length === 0) return {};
+
+    const rows = await db(TEST_RUNS_TABLE)
+      .whereIn('test_case_id', testCaseIds)
+      .groupBy('test_case_id')
+      .select('test_case_id')
+      .count<Array<{ test_case_id: UUID; count: string }>>('* as count');
+
+    return rows.reduce<Record<UUID, number>>((acc, row) => {
+      acc[row.test_case_id] = Number(row.count);
+      return acc;
+    }, {});
   }
 }

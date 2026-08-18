@@ -83,6 +83,10 @@ Implementações concretas das portas/interfaces definidas em `application/`.
 - `queue/k3s-test-run-queue.ts` — implementa `TestRunQueue`, traduzindo uma `TestRun` de domínio em um Job Kubernetes.
 - `config/env.ts` — leitura e validação de variáveis de ambiente (fonte única de configuração).
 
+### Autenticação entre domínios independentes
+
+`JwtAuthService` emite `access_token` (15 min) e `refresh_token` (7 dias) como cookies `httpOnly` (`infra/http/cookies.ts`); `authenticateRequest` (`infra/http/middlewares/authenticator.ts`) aceita tanto o cookie quanto um header `Authorization: Bearer`. Como o frontend é publicado num domínio público diferente do backend (sem ingress compartilhado unificando as duas origens), esses cookies precisam ser configurados para cross-site: `COOKIE_SAMESITE=None`, `COOKIE_SECURE=true` e `CORS_ORIGIN` fixado na origem real do frontend (nunca `*`, que só existe como conveniência de dev local — `index.ts` reflete o `Origin` da requisição apenas quando `CORS_ORIGIN` é deixado em `*`). `COOKIE_DOMAIN` permanece não definido, já que frontend e backend não compartilham um domínio pai. A decisão completa e o tradeoff aceito (Safari bloqueia cookies de terceiros por padrão) estão em [ADR-004](../03-decisions/ADR-004-cross-domain-httponly-cookie-auth.md).
+
 ## Fluxo ponta a ponta: criação e execução de um `TestRun`
 
 1. Cliente autenticado chama `POST /api/test-runs/:testCaseId` (`protected-routes.ts`).

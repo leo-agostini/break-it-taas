@@ -29,4 +29,12 @@ export class InMemoryTestRunMetricsRepository
     void args.actorOrgId;
     return this.items.get(args.testRunId) ?? null;
   }
+
+  async findByTestRunIds(
+    testRunIds: UUID[],
+  ): Promise<TestRunMetricsProjection[]> {
+    return testRunIds
+      .map((id) => this.items.get(id))
+      .filter((item): item is TestRunMetricsReport => !!item);
+  }
 }

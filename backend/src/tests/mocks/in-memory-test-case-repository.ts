@@ -21,21 +21,33 @@ export class InMemoryTestCaseRepository implements TestCaseRepository {
     const testCase = this.items.get(args.testCaseId);
     if (!testCase) return null;
 
+    return this.isOwnedBy(testCase, args) ? testCase : null;
+  }
+
+  async listOwnedByActor(args: {
+    actorUserId: UUID;
+    actorOrgId: UUID | null;
+  }): Promise<TestCase[]> {
+    return [...this.items.values()]
+      .filter((testCase) => this.isOwnedBy(testCase, args))
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  private isOwnedBy(
+    testCase: TestCase,
+    actor: { actorUserId: UUID; actorOrgId: UUID | null },
+  ): boolean {
     if (
       testCase.ownerType === 'USER' &&
-      testCase.ownerId === args.actorUserId
+      testCase.ownerId === actor.actorUserId
     ) {
-      return testCase;
+      return true;
     }
 
-    if (
+    return (
       testCase.ownerType === 'ORGANIZATION' &&
-      args.actorOrgId &&
-      testCase.ownerId === args.actorOrgId
-    ) {
-      return testCase;
-    }
-
-    return null;
+      !!actor.actorOrgId &&
+      testCase.ownerId === actor.actorOrgId
+    );
   }
 }

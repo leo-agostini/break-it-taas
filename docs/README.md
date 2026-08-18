@@ -21,6 +21,13 @@ Os documentos foram iniciados apenas com conhecimento já consolidado no projeto
 - [`02-architecture/frontend-architecture.md`](02-architecture/frontend-architecture.md) — arquitetura feature-based/vertical slice do frontend
 - [`02-architecture/hmac-explained.md`](02-architecture/hmac-explained.md) — HMAC aplicado ao callback do runner
 
+## Decisões (ADRs)
+
+- [`03-decisions/ADR-001-transactional-outbox.md`](03-decisions/ADR-001-transactional-outbox.md) — outbox transacional para despacho de `TestRun`
+- [`03-decisions/ADR-002-domain-model-independent-from-k6.md`](03-decisions/ADR-002-domain-model-independent-from-k6.md) — modelo de domínio independente de k6
+- [`03-decisions/ADR-003-error-boundary-and-http-mapping.md`](03-decisions/ADR-003-error-boundary-and-http-mapping.md) — fronteira de erros entre domínio e HTTP
+- [`03-decisions/ADR-004-cross-domain-httponly-cookie-auth.md`](03-decisions/ADR-004-cross-domain-httponly-cookie-auth.md) — autenticação com cookies httpOnly entre domínios públicos independentes
+
 ## Documentação específica de módulo
 
 Documentos que ficam colocados junto ao código a que se referem (não duplicados aqui):

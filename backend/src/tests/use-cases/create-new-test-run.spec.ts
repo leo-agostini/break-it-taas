@@ -1,50 +1,13 @@
 import { describe, expect, it } from 'bun:test';
 import { CreateNewTestRunUseCase } from '@/application/use-cases/create-new-test-run';
-import {
-  TestCase,
-  TestCaseOwnerType,
-  TestType,
-} from '@/domain/entities/test-case';
 import { TestRunStatus } from '@/domain/entities/test-run';
 import { NotFoundError } from '@/domain/errors/custom-errors';
 import { AuthorizationError } from '@/domain/errors/custom-errors';
-import { AuthStrategyKind } from '@/domain/vos/auth-strategy';
-import {
-  ExecutionPolicy,
-  ResourceProfile,
-} from '@/domain/vos/execution-policy';
-import { LoadMode, LoadProfile, TimeUnit } from '@/domain/vos/load-profile';
-import { CheckKind, HttpMethod, Step } from '@/domain/vos/step';
-import { TargetSystem } from '@/domain/vos/target-system';
-import { ThresholdPolicy } from '@/domain/vos/threshold-policy';
+import { makeTestCase } from '@/tests/fixtures/test-case-fixtures';
 import { InMemoryOutboxRepository } from '@/tests/mocks/in-memory-outbox-repository';
 import { InMemoryTestCaseRepository } from '@/tests/mocks/in-memory-test-case-repository';
 import { InMemoryTestRunRepository } from '@/tests/mocks/in-memory-test-run-repository';
 import { InMemoryUnitOfWork } from '@/tests/mocks/in-memory-unit-of-work';
-
-function makeTestCase() {
-  return TestCase.create({
-    name: 'test case',
-    description: 'desc',
-    ownerType: TestCaseOwnerType.USER,
-    ownerId: crypto.randomUUID(),
-    testType: TestType.SMOKE,
-    targetSystem: new TargetSystem('https://api.example.com', 'staging'),
-    authStrategy: { kind: AuthStrategyKind.NONE },
-    loadProfile: LoadProfile.create(LoadMode.CONSTANT, {
-      duration: 5,
-      targetRate: 10,
-      timeUnit: TimeUnit.SECONDS,
-    }),
-    thresholdPolicy: new ThresholdPolicy(0.1, 200, 400, 0.9, false),
-    executionPolicy: new ExecutionPolicy(ResourceProfile.SMALL, 60),
-    steps: [
-      new Step('/health', HttpMethod.GET, [
-        { kind: CheckKind.STATUS_CODE, expected: 200 },
-      ]),
-    ],
-  });
-}
 
 describe('CreateNewTestRunUseCase', () => {
   it('creates and queues a run and enqueues outbox event', async () => {

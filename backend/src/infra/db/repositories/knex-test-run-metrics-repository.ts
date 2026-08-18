@@ -44,6 +44,26 @@ const toNumber = (value?: string | number | null): number | undefined => {
   return undefined;
 };
 
+const toProjection = (row: TestRunMetricsRow): TestRunMetricsProjection => ({
+  testRunId: row.test_run_id,
+  status: row.status,
+  runtimeRef: row.runtime_ref ?? undefined,
+  completedAt: row.completed_at?.toISOString(),
+  requestedRate: toNumber(row.requested_rate),
+  requestedTimeUnit: row.requested_time_unit ?? undefined,
+  requestedDurationSeconds: row.requested_duration_seconds,
+  achievedRps: toNumber(row.achieved_rps),
+  totalRequests: row.total_requests,
+  droppedIterations: row.dropped_iterations,
+  failureRate: toNumber(row.failure_rate),
+  successRate: toNumber(row.success_rate),
+  p95Ms: toNumber(row.p95_ms),
+  p99Ms: toNumber(row.p99_ms),
+  medianMs: toNumber(row.median_ms),
+  generatorLimited: row.generator_limited,
+  timeoutsDetected: row.timeouts_detected,
+});
+
 export class KnexTestRunMetricsRepository implements TestRunMetricsRepository {
   async upsert(
     projection: TestRunMetricsProjection,
@@ -137,25 +157,19 @@ export class KnexTestRunMetricsRepository implements TestRunMetricsRepository {
       ? (row as unknown as { artifacts: string[] }).artifacts
       : [];
 
-    return {
-      testRunId: row.test_run_id,
-      status: row.status,
-      runtimeRef: row.runtime_ref,
-      completedAt: row.completed_at?.toISOString(),
-      requestedRate: toNumber(row.requested_rate),
-      requestedTimeUnit: row.requested_time_unit,
-      requestedDurationSeconds: row.requested_duration_seconds,
-      achievedRps: toNumber(row.achieved_rps),
-      totalRequests: row.total_requests,
-      droppedIterations: row.dropped_iterations,
-      failureRate: toNumber(row.failure_rate),
-      successRate: toNumber(row.success_rate),
-      p95Ms: toNumber(row.p95_ms),
-      p99Ms: toNumber(row.p99_ms),
-      medianMs: toNumber(row.median_ms),
-      generatorLimited: row.generator_limited,
-      timeoutsDetected: row.timeouts_detected,
-      artifacts,
-    };
+    return { ...toProjection(row), artifacts };
+  }
+
+  async findByTestRunIds(
+    testRunIds: UUID[],
+  ): Promise<TestRunMetricsProjection[]> {
+    if (testRunIds.length === 0) return [];
+
+    const rows = await db<TestRunMetricsRow>(TABLE_NAME).whereIn(
+      'test_run_id',
+      testRunIds,
+    );
+
+    return rows.map(toProjection);
   }
 }

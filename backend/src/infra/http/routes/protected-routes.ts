@@ -1,7 +1,11 @@
 import type { AppContainer } from '@/infra/http/container';
 import { createTestCaseController } from '@/infra/http/controllers/create-test-case-controller';
 import { createTestRunController } from '@/infra/http/controllers/create-test-run-controller';
+import { getTestCaseController } from '@/infra/http/controllers/get-test-case-controller';
+import { getTestRunController } from '@/infra/http/controllers/get-test-run-controller';
 import { getTestRunReportController } from '@/infra/http/controllers/get-test-run-report-controller';
+import { listTestCaseRunsController } from '@/infra/http/controllers/list-test-case-runs-controller';
+import { listTestCasesController } from '@/infra/http/controllers/list-test-cases-controller';
 import { authenticateRequest } from '@/infra/http/middlewares/authenticator';
 import { Elysia, t } from 'elysia';
 
@@ -9,6 +13,10 @@ export function createProtectedRoutes(container: AppContainer) {
   const createTestCase = createTestCaseController(container);
   const createTestRun = createTestRunController(container);
   const getTestRunReport = getTestRunReportController(container);
+  const listTestCases = listTestCasesController(container);
+  const getTestCase = getTestCaseController(container);
+  const listTestCaseRuns = listTestCaseRunsController(container);
+  const getTestRun = getTestRunController(container);
 
   return new Elysia({ prefix: '/api' })
     .derive(({ headers }) => {
@@ -46,6 +54,67 @@ export function createProtectedRoutes(container: AppContainer) {
           thresholdPolicy: t.Record(t.String(), t.Unknown()),
           executionPolicy: t.Record(t.String(), t.Unknown()),
           steps: t.Optional(t.Array(t.Record(t.String(), t.Unknown()))),
+        }),
+      },
+    )
+    .get(
+      '/test-cases',
+      async ({ actor }) => {
+        return listTestCases(actor);
+      },
+      {
+        detail: {
+          tags: ['test-cases'],
+          summary: 'List test cases owned by the actor',
+          security: [{ bearerAuth: [] }],
+        },
+      },
+    )
+    .get(
+      '/test-cases/:testCaseId',
+      async ({ params, actor }) => {
+        return getTestCase(params.testCaseId as UUID, actor);
+      },
+      {
+        detail: {
+          tags: ['test-cases'],
+          summary: 'Get a test case by id',
+          security: [{ bearerAuth: [] }],
+        },
+        params: t.Object({
+          testCaseId: t.String({ format: 'uuid' }),
+        }),
+      },
+    )
+    .get(
+      '/test-cases/:testCaseId/runs',
+      async ({ params, actor }) => {
+        return listTestCaseRuns(params.testCaseId as UUID, actor);
+      },
+      {
+        detail: {
+          tags: ['test-runs'],
+          summary: 'List runs of a test case with their metrics summary',
+          security: [{ bearerAuth: [] }],
+        },
+        params: t.Object({
+          testCaseId: t.String({ format: 'uuid' }),
+        }),
+      },
+    )
+    .get(
+      '/test-runs/:testRunId',
+      async ({ params, actor }) => {
+        return getTestRun(params.testRunId as UUID, actor);
+      },
+      {
+        detail: {
+          tags: ['test-runs'],
+          summary: 'Get a test run by id',
+          security: [{ bearerAuth: [] }],
+        },
+        params: t.Object({
+          testRunId: t.String({ format: 'uuid' }),
         }),
       },
     )

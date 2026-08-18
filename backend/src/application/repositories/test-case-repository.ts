@@ -8,5 +8,9 @@ export interface TestCaseRepository {
     actorUserId: UUID;
     actorOrgId: UUID | null;
   }): Promise<TestCase | null>;
+  listOwnedByActor(args: {
+    actorUserId: UUID;
+    actorOrgId: UUID | null;
+  }): Promise<TestCase[]>;
   create(testCase: TestCase, tx?: TransactionContext): Promise<void>;
 }

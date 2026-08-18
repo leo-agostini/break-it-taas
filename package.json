@@ -2,7 +2,10 @@
   "name": "break-it-taas",
   "private": true,
   "packageManager": "npm@11.12.1",
-  "workspaces": ["frontend", "backend"],
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "dev": "turbo run dev --parallel",
     "api": "npm --workspace backend run dev",
@@ -29,5 +32,10 @@
     "typescript": "^5.8.3"
   },
   "type": "module",
-  "dependencies": {}
+  "dependencies": {},
+  "allowScripts": {
+    "@biomejs/biome@1.9.4": true,
+    "argon2@0.44.0": true,
+    "esbuild@0.25.12": true
+  }
 }
