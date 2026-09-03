@@ -35,10 +35,13 @@ export class GetTestRunReportUseCase {
         p95Ms: report.p95Ms,
         p99Ms: report.p99Ms,
         medianMs: report.medianMs,
+        // Non-null only when the run was aborted by a breached threshold.
+        breakingPointRate: report.breakingPointRate,
       },
       flags: {
         generatorLimited: report.generatorLimited,
         timeoutsDetected: report.timeoutsDetected,
+        aborted: report.aborted,
       },
       artifacts: report.artifacts,
     };

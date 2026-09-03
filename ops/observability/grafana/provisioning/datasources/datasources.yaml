@@ -1,0 +1,63 @@
+# The point of this file is the cross-linking, not the datasources themselves.
+# Logs carry trace_id -> jump to the trace; a trace span -> jump to its logs and
+# to its RED metrics. Without derivedFields/tracesTo* you get three disconnected
+# tools instead of one investigation path.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+      # Lets a latency spike on a graph link straight to an example trace.
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # pino writes trace_id as a flat top-level JSON field precisely so this
+        # regex can find it.
+        - name: TraceID
+          matcherRegex: '"trace_id":"(\w+)"'
+          url: '${__value.raw}'
+          datasourceUid: tempo
+        - name: RequestID
+          matcherRegex: '"request_id":"([\w.-]+)"'
+          url: '$${__value.raw}'
+
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        filterByTraceID: true
+        filterBySpanID: false
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: -5m
+        spanEndTimeShift: 5m
+        queries:
+          - name: 'Request rate'
+            query: 'sum(rate(traces_spanmetrics_calls_total{$$__tags}[5m]))'
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      lokiSearch:
+        datasourceUid: loki

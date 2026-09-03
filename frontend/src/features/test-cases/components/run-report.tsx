@@ -60,6 +60,16 @@ export function RunReport({
               Timeouts detected
             </Badge>
           ) : null}
+          {report?.flags.aborted ? (
+            <Badge
+              variant="outline"
+              className="border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300"
+            >
+              {report.achieved.breakingPointRate
+                ? `Broke at ~${Math.round(report.achieved.breakingPointRate)}/s`
+                : 'Aborted on threshold'}
+            </Badge>
+          ) : null}
         </div>
 
         <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">

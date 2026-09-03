@@ -7,7 +7,7 @@ Esta pasta organiza a base documental do trabalho final:
 - `02-architecture/` — fronteiras, visão arquitetural e arquitetura de frontend/backend
 - `03-decisions/` — ADRs e tradeoffs
 - `04-quality/` — rastreabilidade e qualidade
-- `05-operations/` — operação local, ambiente K3D/Rancher e guias de Kubernetes/k6
+- `05-operations/` — operação local, cluster kind e guias de Kubernetes/k6
 - `ai/prompts/` — prompts reutilizáveis para ferramentas de IA (diagramas, geração de UI)
 
 Arquivo-base de requisitos fornecido pelo autor: `01-product/requirements-catalog.md`.
@@ -27,6 +27,8 @@ Os documentos foram iniciados apenas com conhecimento já consolidado no projeto
 - [`03-decisions/ADR-002-domain-model-independent-from-k6.md`](03-decisions/ADR-002-domain-model-independent-from-k6.md) — modelo de domínio independente de k6
 - [`03-decisions/ADR-003-error-boundary-and-http-mapping.md`](03-decisions/ADR-003-error-boundary-and-http-mapping.md) — fronteira de erros entre domínio e HTTP
 - [`03-decisions/ADR-004-cross-domain-httponly-cookie-auth.md`](03-decisions/ADR-004-cross-domain-httponly-cookie-auth.md) — autenticação com cookies httpOnly entre domínios públicos independentes
+- [`03-decisions/ADR-005-kind-over-k3d-for-local-cluster.md`](03-decisions/ADR-005-kind-over-k3d-for-local-cluster.md) — kind em vez de k3d para o cluster local
+- [`03-decisions/ADR-006-compose-first-local-environment.md`](03-decisions/ADR-006-compose-first-local-environment.md) — ambiente local via Docker Compose, cluster só para Jobs
 
 ## Documentação específica de módulo
 

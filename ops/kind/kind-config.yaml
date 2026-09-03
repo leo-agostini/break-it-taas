@@ -1,0 +1,17 @@
+# kind cluster topology for Break It TaaS local development.
+#
+# The cluster runs one thing: k6 runner Jobs. The API, the outbox worker, the
+# frontend, PostgreSQL, and the load target all live outside it (Docker Compose
+# and your host), so there is nothing here to expose to the host — no ingress
+# controller, no load balancer, and no extraPortMappings. Traffic only ever
+# flows outward, from runner pods to the host gateway.
+#
+# The default CNI (kindnetd) is kept. It does NOT enforce NetworkPolicy:
+# policies apply cleanly but silently allow all traffic. Do not validate
+# network isolation against this cluster.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+  - role: worker

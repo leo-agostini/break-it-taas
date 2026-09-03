@@ -18,6 +18,10 @@ export interface TestRunMetricsProjection {
   medianMs?: number;
   generatorLimited: boolean;
   timeoutsDetected: boolean;
+  /** The run was stopped early by a breached abortOnFail threshold. */
+  aborted: boolean;
+  /** Arrival rate reached at the abort — a BREAKPOINT run's headline result. */
+  breakingPointRate?: number;
 }
 
 export interface TestRunMetricsReport extends TestRunMetricsProjection {

@@ -1,0 +1,23 @@
+# Prometheus is the metrics store for three producers:
+#   - Alloy (app OTLP metrics, cAdvisor, postgres-exporter) via remote write
+#   - Tempo's metrics-generator (span metrics + service graphs) via remote write
+#   - k6 runner pods, which remote-write directly during a load test
+#
+# Everything arrives by remote write, so there are almost no scrape jobs here.
+# The remote-write receiver is enabled by a CLI flag in docker-compose.yml.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: taas-dev
+    environment: local
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  # Prometheus scrapes only itself; every other source pushes.
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

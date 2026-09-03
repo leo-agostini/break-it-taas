@@ -6,18 +6,48 @@ import type { TestRunRepository } from '@/application/repositories/test-run-repo
 import { OutboxEvent } from '@/domain/entities/outbox-event';
 import { TestCase, TestCaseOwnerType } from '@/domain/entities/test-case';
 import { TestRun } from '@/domain/entities/test-run';
-import { AuthorizationError } from '@/domain/errors/custom-errors';
+import {
+  AuthorizationError,
+  ValidationError,
+} from '@/domain/errors/custom-errors';
 import { TestRunEvents } from '@/domain/events/test-run-events';
-import { assertCompatibleLoadProfile } from '@/domain/services/load-profile-compatibility-policy';
+import { assertTimeoutCoversProfile } from '@/domain/services/execution-policy-compatibility';
+import {
+  assertCompatibleLoadProfile,
+  assertThresholdPolicyForType,
+} from '@/domain/services/load-profile-compatibility-policy';
+import { deriveLoadProfile } from '@/domain/services/load-profile-presets';
 import { ExecutionPolicy } from '@/domain/vos/execution-policy';
 import { LoadProfile } from '@/domain/vos/load-profile';
 import { Step } from '@/domain/vos/step';
 import { TargetSystem } from '@/domain/vos/target-system';
 import { ThresholdPolicy } from '@/domain/vos/threshold-policy';
+import { ZodError } from 'zod';
 import {
   type NewTestCaseInput,
   newTestCaseSchema,
 } from '../validators/new-test-case-validator';
+
+/**
+ * A malformed payload is the caller's mistake, not a server fault. Without
+ * this, a ZodError escapes as an unmapped error and the API answers 500 to a
+ * request that simply had the wrong shape.
+ */
+function parsePayload(input: NewTestCaseInput) {
+  try {
+    return newTestCaseSchema.parse(input);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      const detail = error.issues
+        .map(
+          (issue) => `${issue.path.join('.') || 'payload'}: ${issue.message}`,
+        )
+        .join('; ');
+      throw new ValidationError(detail);
+    }
+    throw error;
+  }
+}
 
 export class CreateNewTestCaseUseCase {
   constructor(
@@ -31,7 +61,7 @@ export class CreateNewTestCaseUseCase {
     input: NewTestCaseInput,
     actor: ActorContext,
   ): Promise<{ testCaseId: UUID; testRunId: UUID }> {
-    const payload = newTestCaseSchema.parse(input);
+    const payload = parsePayload(input);
     const requestOwner =
       payload.ownerType === TestCaseOwnerType.ORGANIZATION
         ? actor.orgId
@@ -41,12 +71,21 @@ export class CreateNewTestCaseUseCase {
       throw new AuthorizationError();
     }
 
-    const loadProfile = LoadProfile.create(
-      payload.loadProfile.mode,
-      payload.loadProfile.config,
-    );
+    // A preset derives the shape the k6 guide prescribes for this test type;
+    // an explicit profile is taken as authored. The validator guarantees
+    // exactly one of the two is present.
+    const explicitProfile = payload.loadProfile;
+    const loadProfile = payload.loadPreset
+      ? deriveLoadProfile(payload.testType, payload.loadPreset)
+      : explicitProfile
+        ? LoadProfile.create(explicitProfile.mode, explicitProfile.config)
+        : (() => {
+            throw new ValidationError(
+              'Provide exactly one of loadProfile or loadPreset',
+            );
+          })();
 
-    assertCompatibleLoadProfile(payload.testType, payload.loadProfile.mode);
+    assertCompatibleLoadProfile(payload.testType, loadProfile.mode);
 
     const targetSystem = new TargetSystem(
       payload.targetSystem.baseUrl,
@@ -67,6 +106,9 @@ export class CreateNewTestCaseUseCase {
       payload.executionPolicy.cpuMillicores,
       payload.executionPolicy.memoryMb,
     );
+
+    assertThresholdPolicyForType(payload.testType, thresholdPolicy);
+    assertTimeoutCoversProfile(loadProfile, executionPolicy);
 
     const testCase = TestCase.create({
       name: payload.name,

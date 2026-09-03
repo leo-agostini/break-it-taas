@@ -22,7 +22,7 @@ Components and arrows, in order:
 5. "Outbox Worker"
         | creates load test job
         v
-6. "Kubernetes (k3s)"
+6. "Kubernetes (kind local, gerenciado em produção)"
         | runs
         v
 7. "k6 Runner Job"

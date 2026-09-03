@@ -50,7 +50,10 @@ export function createProtectedRoutes(container: AppContainer) {
             environment: t.String(),
           }),
           authStrategy: t.Record(t.String(), t.Unknown()),
-          loadProfile: t.Record(t.String(), t.Unknown()),
+          // Exactly one of these is required; which one is enforced by the
+          // zod schema in the use case, not here.
+          loadProfile: t.Optional(t.Record(t.String(), t.Unknown())),
+          loadPreset: t.Optional(t.Record(t.String(), t.Unknown())),
           thresholdPolicy: t.Record(t.String(), t.Unknown()),
           executionPolicy: t.Record(t.String(), t.Unknown()),
           steps: t.Optional(t.Array(t.Record(t.String(), t.Unknown()))),

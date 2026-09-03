@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { ConfigurationError } from '@/domain/errors/custom-errors';
 import { env } from '@/infra/config/env';
 import { BatchV1Api, KubeConfig, type V1Job } from '@kubernetes/client-node';
 
@@ -19,10 +20,7 @@ export class KubernetesJobClient {
       kc.loadFromCluster();
     } else {
       kc.loadFromDefault();
-      const context = env.KUBERNETES_CONTEXT;
-      if (context && kc.getContexts().some((c) => c.name === context)) {
-        kc.setCurrentContext(context);
-      }
+      KubernetesJobClient.selectContext(kc, env.KUBERNETES_CONTEXT);
     }
 
     this.batchApi = kc.makeApiClient(BatchV1Api);
@@ -146,6 +144,34 @@ export class KubernetesJobClient {
     };
   }
 
+  /**
+   * Selects the kubeconfig context to dispatch Jobs to.
+   *
+   * Throws when the context is unset or absent from kubeconfig. Both used to
+   * be silent no-ops, which left the client pointed at kubectl's ambient
+   * current-context — so a stale or unrelated current-context meant runner
+   * Jobs landed in the wrong cluster with no signal at all.
+   */
+  static selectContext(kc: KubeConfig, context: string | undefined): void {
+    if (!context?.trim()) {
+      throw new ConfigurationError(
+        'KUBERNETES_CONTEXT is required when running outside the cluster. ' +
+          'Set it explicitly (local default: kind-taas-dev) — the ambient ' +
+          'kubectl current-context is not used as a fallback.',
+      );
+    }
+
+    const available = kc.getContexts().map((c) => c.name);
+    if (!available.includes(context)) {
+      throw new ConfigurationError(
+        `KUBERNETES_CONTEXT "${context}" was not found in kubeconfig. ` +
+          `Available contexts: ${available.join(', ') || '(none)'}.`,
+      );
+    }
+
+    kc.setCurrentContext(context);
+  }
+
   static isAlreadyExists(error: unknown): boolean {
     return (
       typeof error === 'object' &&
@@ -156,10 +182,29 @@ export class KubernetesJobClient {
     );
   }
 
+  /**
+   * Recognises "the API server's certificate chain is not trusted".
+   *
+   * The kubeconfig CA reaches the request only through the fetch fallback, so
+   * every wording of that rejection has to be matched here. Bun says "unable to
+   * verify the first certificate" where Node says "self signed certificate in
+   * certificate chain"; matching only the latter left kind dispatch failing
+   * with the fallback never engaged.
+   */
   static isTlsChainError(error: unknown): boolean {
-    return KubernetesJobClient.errorMessages(error).some((message) =>
-      message.toLowerCase().includes('self signed certificate'),
-    );
+    const signatures = [
+      'self signed certificate',
+      'self-signed certificate',
+      'unable to verify the first certificate',
+      'unable to get local issuer certificate',
+      'depth_zero_self_signed_cert',
+      'unable_to_verify_leaf_signature',
+    ];
+
+    return KubernetesJobClient.errorMessages(error).some((message) => {
+      const normalized = message.toLowerCase();
+      return signatures.some((signature) => normalized.includes(signature));
+    });
   }
 
   static isValidInClusterServiceEndpoint(

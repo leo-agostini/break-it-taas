@@ -64,6 +64,7 @@ describe('ListTestCaseRunsUseCase', () => {
       successRate: 0.99,
       generatorLimited: false,
       timeoutsDetected: false,
+      aborted: false,
     });
 
     const result = await useCase.execute(testCase.id as UUID, {

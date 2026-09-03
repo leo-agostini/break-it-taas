@@ -14,8 +14,12 @@
 - **HTTP**: Axios (`src/lib/httpClient.ts`), client instance compartilhada.
 - **Data fetching**: SWR, um hook por operação de leitura. Nenhum componente chama `api/` diretamente.
 - **Formulários**: `react-hook-form` + `zod` (`schemas/`), como já usado em `features/login` e `features/signup`.
-- **Estado global de cliente**: Recoil, para estado que precisa ser compartilhado entre features ou sobreviver a navegação (ex. sessão do usuário autenticado, preferências de UI). Estado remoto (dados vindos da API) **não** é duplicado em átomos Recoil — a fonte de verdade dos dados remotos é o cache do SWR; Recoil guarda apenas estado de cliente genuíno.
-- **Estado local/efêmero de UI** (campo aberto, tab ativa, etc.): `useState` dentro do container ou do componente de apresentação, sem subir para Recoil.
+- **Estado global de cliente**: Jotai, para estado que precisa ser compartilhado entre features ou sobreviver a navegação (ex. sessão do usuário autenticado, preferências de UI). Estado remoto (dados vindos da API) **não** é duplicado em átomos Jotai — a fonte de verdade dos dados remotos é o cache do SWR; Jotai guarda apenas estado de cliente genuíno.
+
+  O modelo atômico veio do Recoil, substituído por Jotai porque o Recoil lê internals do React (`__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED`) que o React 19 removeu, quebrando todo render no servidor. O projeto está sem manutenção desde 2023, então não haverá correção.
+
+  Como a aplicação roda com `ssr: true` num processo Node de vida longa, o `<Provider>` do Jotai em `src/root.tsx` é **obrigatório**: sem ele os átomos caem numa store global de módulo, compartilhada entre requisições concorrentes, e a sessão de um usuário vazaria no HTML renderizado para outro.
+- **Estado local/efêmero de UI** (campo aberto, tab ativa, etc.): `useState` dentro do container ou do componente de apresentação, sem subir para Jotai.
 
 ## Estrutura de uma feature
 
@@ -25,7 +29,7 @@ src/features/<feature>/
   api/            # chamadas HTTP cruas (axios); tipos de request/response remotos (DTOs)
   mappers/        # tradução DTO remoto -> tipo de domínio da feature
   hooks/          # hooks SWR: chamam api/ + mappers/, expõem dados já em formato de domínio
-  containers/     # orquestram hooks + estado (Recoil/local) + handlers; sem JSX de apresentação "burro"
+  containers/     # orquestram hooks + estado (Jotai/local) + handlers; sem JSX de apresentação "burro"
   components/     # componentes de apresentação (presentational/"burros"): recebem props, sem fetch
   schemas/        # validação de formulário (zod), quando a feature tem forms
 ```
@@ -47,11 +51,11 @@ features/login/
 ### Papel de cada camada
 
 - **`types/`** — tipos de domínio, moldados para o que a UI precisa, independentes do formato exato que o backend devolve.
-- **`api/`** — só I/O: chama o backend com Axios e retorna o dado **no shape remoto** (DTO), sem transformação. Não conhece Recoil, SWR ou React.
+- **`api/`** — só I/O: chama o backend com Axios e retorna o dado **no shape remoto** (DTO), sem transformação. Não conhece Jotai, SWR ou React.
 - **`mappers/`** — funções puras `remote -> domain`. É o único lugar onde um DTO remoto é conhecido fora de `api/`. Se o backend mudar um nome de campo, o conserto fica isolado aqui.
 - **`hooks/`** — usam SWR (`useSWR`/`useSWRMutation`) chamando `api/` e passando o resultado pelo `mapper` antes de retornar. Expõem `{ data, error, isLoading }` já tipados como domínio. É a única camada que conhece SWR.
-- **`containers/`** — componentes React "inteligentes": consomem `hooks/` e, quando necessário, átomos/seletores Recoil; concentram handlers de evento e decisões (navegar, mostrar toast, abrir modal); passam dados prontos como props para `components/`. Não têm HTML/estilo de apresentação além de composição estrutural mínima.
-- **`components/`** — componentes de apresentação: recebem props, renderizam UI, disparam callbacks recebidos por prop. Não fazem fetch, não importam hooks de dados, não conhecem Recoil.
+- **`containers/`** — componentes React "inteligentes": consomem `hooks/` e, quando necessário, átomos/seletores derivados do Jotai; concentram handlers de evento e decisões (navegar, mostrar toast, abrir modal); passam dados prontos como props para `components/`. Não têm HTML/estilo de apresentação além de composição estrutural mínima.
+- **`components/`** — componentes de apresentação: recebem props, renderizam UI, disparam callbacks recebidos por prop. Não fazem fetch, não importam hooks de dados, não conhecem Jotai.
 
 ## Regra de dependência
 

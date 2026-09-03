@@ -27,6 +27,7 @@ describe('GetTestRunReportUseCase', () => {
       medianMs: 1800,
       generatorLimited: true,
       timeoutsDetected: true,
+      aborted: false,
     });
 
     const report = await useCase.execute(testRunId, {
@@ -37,6 +38,29 @@ describe('GetTestRunReportUseCase', () => {
     expect(report.requested.rate).toBe(5000);
     expect(report.achieved.rps).toBe(520);
     expect(report.flags.generatorLimited).toBe(true);
+  });
+
+  it('reports where a breakpoint run broke', async () => {
+    const metrics = new InMemoryTestRunMetricsRepository();
+    const useCase = new GetTestRunReportUseCase(metrics);
+    const testRunId = crypto.randomUUID();
+
+    await metrics.upsert({
+      testRunId,
+      status: 'SUCCEEDED',
+      generatorLimited: false,
+      timeoutsDetected: false,
+      aborted: true,
+      breakingPointRate: 1487.25,
+    });
+
+    const report = await useCase.execute(testRunId, {
+      userId: crypto.randomUUID(),
+      orgId: null,
+    });
+
+    expect(report.flags.aborted).toBe(true);
+    expect(report.achieved.breakingPointRate).toBe(1487.25);
   });
 
   it('throws when report is missing', async () => {

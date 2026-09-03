@@ -13,10 +13,11 @@ import { publicHttpClient } from '@/lib/httpClient';
 import type { AuthenticatedUser } from '@/lib/server-auth';
 import { cn } from '@/lib/utils';
 import { currentUserAtom } from '@/state/current-user-atom';
+import { useSetAtom } from 'jotai';
+import { useHydrateAtoms } from 'jotai/utils';
 import { LayoutList, LogOut, User } from 'lucide-react';
 import { type ReactNode, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { useSetRecoilState } from 'recoil';
 
 const nav = [{ label: 'Test Cases', href: '/test-cases', icon: LayoutList }];
 
@@ -27,10 +28,17 @@ export function AppShell({
   user: AuthenticatedUser;
   children: ReactNode;
 }) {
-  const setCurrentUser = useSetRecoilState(currentUserAtom);
+  // Seeds the store during render so the user is already present on the SSR
+  // pass, instead of appearing only after hydration.
+  useHydrateAtoms([[currentUserAtom, user]]);
+
+  const setCurrentUser = useSetAtom(currentUserAtom);
   const location = useLocation();
   const navigate = useNavigate();
 
+  // useHydrateAtoms only fires once per store, and the store outlives
+  // client-side navigation, so signing in as a second user in the same tab
+  // would otherwise keep the first user's id.
   useEffect(() => {
     setCurrentUser(user);
   }, [user, setCurrentUser]);

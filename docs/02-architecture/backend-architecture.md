@@ -80,7 +80,7 @@ Implementações concretas das portas/interfaces definidas em `application/`.
   - `security/runner-callback-signature.ts` — valida HMAC do callback do runner k6 (ver [hmac-explained.md](hmac-explained.md)).
 - `db/` — adaptador Knex: `knex.ts` (conexão), `knex-unit-of-work.ts` (implementa `UnitOfWork`), `repositories/knex-*.ts` (implementam as interfaces de `application/repositories`), `migrations/`.
 - `k8s/kubernetes-job-client.ts` — cria/observa Jobs Kubernetes que executam o runner k6.
-- `queue/k3s-test-run-queue.ts` — implementa `TestRunQueue`, traduzindo uma `TestRun` de domínio em um Job Kubernetes.
+- `queue/kubernetes-test-run-queue.ts` — implementa `TestRunQueue`, traduzindo uma `TestRun` de domínio em um Job Kubernetes.
 - `config/env.ts` — leitura e validação de variáveis de ambiente (fonte única de configuração).
 
 ### Autenticação entre domínios independentes
@@ -92,14 +92,14 @@ Implementações concretas das portas/interfaces definidas em `application/`.
 1. Cliente autenticado chama `POST /api/test-runs/:testCaseId` (`protected-routes.ts`).
 2. `createTestRunController` delega para `CreateNewTestRunUseCase.execute()`.
 3. O caso de uso valida posse do `TestCase`, cria a entidade `TestRun` (`status: queued`) e um `OutboxEvent`, e persiste ambos na mesma transação (`UnitOfWork`).
-4. `OutboxDispatcherWorker` (processo `worker.ts`) faz polling do outbox, encontra o evento pendente e usa `K3sTestRunQueue.publish()` para criar um Job Kubernetes via `KubernetesJobClient`.
+4. `OutboxDispatcherWorker` (processo `worker.ts`) faz polling do outbox, encontra o evento pendente e usa `KubernetesTestRunQueue.publish()` para criar um Job Kubernetes via `KubernetesJobClient`.
 5. O runner k6, ao terminar, chama o callback interno (`internal-routes.ts`), autenticado por HMAC.
 6. `CompleteTestRunFromCallbackUseCase` persiste o resultado, normaliza métricas (`normalize-k6-result-metrics.ts`) e atualiza o status do `TestRun`.
 7. O cliente consulta `GET /api/test-runs/:testRunId/report`, atendido por `GetTestRunReportUseCase`.
 
 ## Testes (`src/tests/`)
 
-A árvore de testes espelha `domain/`, `application/` (via `use-cases/`) e `infra/`. Casos de uso são testados com **repositórios in-memory** (`tests/mocks/in-memory-*-repository.ts`), o que só é possível porque os casos de uso dependem de interfaces, nunca de implementações Knex. Há um teste de integração (`tests/integration/test-run-k3s-flow.spec.ts`) que exercita o fluxo outbox → Kubernetes Job.
+A árvore de testes espelha `domain/`, `application/` (via `use-cases/`) e `infra/`. Casos de uso são testados com **repositórios in-memory** (`tests/mocks/in-memory-*-repository.ts`), o que só é possível porque os casos de uso dependem de interfaces, nunca de implementações Knex. Há um teste de integração (`tests/integration/test-run-cluster-flow.spec.ts`) que exercita o fluxo outbox → Kubernetes Job.
 
 ## Regras para novo código
 

@@ -5,13 +5,13 @@ import type { NewTestCaseFormValues } from '@/features/test-cases/schemas/new-te
 import type { TestCaseOwnerType } from '@/features/test-cases/types/test-case';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { currentUserAtom } from '@/state/current-user-atom';
+import { useAtomValue } from 'jotai';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useRecoilValue } from 'recoil';
 import { toast } from 'sonner';
 
 export function TestCaseFormContainer() {
-  const currentUser = useRecoilValue(currentUserAtom);
+  const currentUser = useAtomValue(currentUserAtom);
   const navigate = useNavigate();
   const { createTestCase, isCreating } = useCreateTestCase();
   const [ownerType, setOwnerType] = useState<TestCaseOwnerType>('USER');

@@ -5,9 +5,8 @@
   "scripts": {
     "dev": "bun --watch src/index.ts",
     "worker:dev": "bun --watch src/worker.ts",
-    "test": "bun test ./src/tests",
-    "test:cluster": "bun --env-file=.env.cluster test ./src/tests/integration",
-    "test:hybrid": "bun --env-file=.env test ./src/tests/integration",
+    "test": "RUN_CLUSTER_INTEGRATION=0 bun test ./src/tests",
+    "test:integration": "RUN_CLUSTER_INTEGRATION=1 bun --env-file=.env test ./src/tests/integration",
     "build": "tsc -p tsconfig.json --noEmit false --outDir dist",
     "start": "bun run dist/src/index.js",
     "worker:start": "bun run dist/src/worker.js",

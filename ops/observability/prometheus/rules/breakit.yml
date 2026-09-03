@@ -1,0 +1,58 @@
+# Alerting rules for the signals that are actually actionable in this system.
+# Grafana's unified alerting reads these through the Prometheus datasource.
+groups:
+  - name: breakit-outbox
+    rules:
+      # The outbox is the heart of the dispatch pipeline. If events age without
+      # being published, test runs silently never start — the exact failure the
+      # worker was previously unable to report at all.
+      - alert: OutboxBacklogAging
+        expr: breakit_outbox_oldest_pending_age_seconds > 120
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox events are aging (>2m unpublished)"
+          description: "The worker may be down, or Kubernetes Job creation is failing."
+
+      - alert: OutboxEventsFailing
+        expr: rate(breakit_outbox_events_processed_total{result="failed"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox events are exhausting their retries"
+
+  - name: breakit-api
+    rules:
+      - alert: ApiHighErrorRate
+        expr: |
+          sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m]))
+            / sum(rate(http_server_request_duration_seconds_count[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API 5xx rate above 5%"
+
+      # min:2 max:10 in knex.ts — sustained pending acquires means the pool is
+      # the bottleneck, not Postgres itself.
+      - alert: DbPoolSaturated
+        expr: db_client_connection_pending_requests > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Knex connection pool has sustained pending acquires"
+
+  - name: breakit-collector
+    rules:
+      # If the collector is down every other alert here goes quiet, so this one
+      # guards the guard.
+      - alert: AlloyDown
+        expr: up{job="alloy"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alloy collector is not reporting"

@@ -140,7 +140,15 @@ export function toNewTestCaseInput(
       environment: values.environment,
     },
     authStrategy: toAuthStrategy(values.auth),
-    loadProfile: toLoadProfile(values),
+    ...(values.loadSource === 'PRESET'
+      ? {
+          loadPreset: {
+            peakRate: toRequiredNumber(values.preset.peakRate),
+            duration: toRequiredNumber(values.preset.duration),
+            timeUnit: values.preset.timeUnit,
+          },
+        }
+      : { loadProfile: toLoadProfile(values) }),
     thresholdPolicy: {
       maxErrorRate: toNumber(values.thresholds.maxErrorRate),
       minCheckSuccessRate: toNumber(values.thresholds.minCheckSuccessRate),

@@ -1,11 +1,9 @@
+import { API_SERVER_URL, API_URL } from '@/lib/env';
 import axios, {
   type AxiosError,
   type AxiosInstance,
   type AxiosRequestConfig,
 } from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? '/api';
-const API_SERVER_BASE_URL = import.meta.env.VITE_API_SERVER_URL ?? API_BASE_URL;
 
 type RetriableRequestConfig = AxiosRequestConfig & {
   _retry?: boolean;
@@ -50,7 +48,7 @@ function attachRefreshInterceptor(
 }
 
 export const publicHttpClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -58,7 +56,7 @@ export const publicHttpClient = axios.create({
 });
 
 const refreshHttpClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -66,7 +64,7 @@ const refreshHttpClient = axios.create({
 });
 
 export const privateHttpClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -78,9 +76,9 @@ attachRefreshInterceptor(privateHttpClient, refreshHttpClient);
 function resolveServerBaseUrl(request: Request) {
   const requestUrl = new URL(request.url);
 
-  return API_SERVER_BASE_URL.startsWith('http')
-    ? API_SERVER_BASE_URL
-    : `${requestUrl.origin}${API_SERVER_BASE_URL}`;
+  return API_SERVER_URL.startsWith('http')
+    ? API_SERVER_URL
+    : `${requestUrl.origin}${API_SERVER_URL}`;
 }
 
 export function createServerPublicHttpClient(request: Request) {

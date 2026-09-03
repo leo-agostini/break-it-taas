@@ -28,6 +28,8 @@ type TestRunMetricsRow = {
   median_ms?: number;
   generator_limited: boolean;
   timeouts_detected: boolean;
+  aborted: boolean;
+  breaking_point_rate?: number;
   created_at: Date;
   updated_at: Date;
 };
@@ -62,6 +64,8 @@ const toProjection = (row: TestRunMetricsRow): TestRunMetricsProjection => ({
   medianMs: toNumber(row.median_ms),
   generatorLimited: row.generator_limited,
   timeoutsDetected: row.timeouts_detected,
+  aborted: row.aborted,
+  breakingPointRate: toNumber(row.breaking_point_rate),
 });
 
 export class KnexTestRunMetricsRepository implements TestRunMetricsRepository {
@@ -94,6 +98,8 @@ export class KnexTestRunMetricsRepository implements TestRunMetricsRepository {
         median_ms: projection.medianMs,
         generator_limited: projection.generatorLimited,
         timeouts_detected: projection.timeoutsDetected,
+        aborted: projection.aborted,
+        breaking_point_rate: projection.breakingPointRate,
         created_at: now,
         updated_at: now,
       })
@@ -117,6 +123,8 @@ export class KnexTestRunMetricsRepository implements TestRunMetricsRepository {
         median_ms: projection.medianMs,
         generator_limited: projection.generatorLimited,
         timeouts_detected: projection.timeoutsDetected,
+        aborted: projection.aborted,
+        breaking_point_rate: projection.breakingPointRate,
         updated_at: now,
       });
   }

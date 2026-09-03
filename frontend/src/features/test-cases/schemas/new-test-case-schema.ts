@@ -95,6 +95,14 @@ export const newTestCaseFormSchema = z
       applyAs: z.enum(['BEARER_TOKEN', 'HEADER']),
     }),
 
+    // PRESET lets the backend derive the k6-recommended shape for the chosen
+    // test type; MANUAL keeps the hand-authored stages below.
+    loadSource: z.enum(['PRESET', 'MANUAL']),
+    preset: z.object({
+      peakRate: numericString(),
+      duration: numericString(),
+      timeUnit: z.enum(TIME_UNITS),
+    }),
     loadMode: z.enum(['CONSTANT', 'RAMP']),
     constant: z.object({
       targetRate: numericString(),
@@ -135,7 +143,9 @@ export const newTestCaseFormSchema = z
     // Mirrors backend assertCompatibleLoadProfile so an incompatible pairing is
     // caught here instead of coming back as a 422.
     const allowed = loadModesByTestType[values.testType as TestType];
-    if (!allowed.includes(values.loadMode)) {
+    // A derived profile is compatible by construction, so this only applies to
+    // hand-authored load.
+    if (values.loadSource === 'MANUAL' && !allowed.includes(values.loadMode)) {
       ctx.addIssue({
         code: 'custom',
         path: ['loadMode'],
@@ -295,6 +305,8 @@ export const defaultNewTestCaseValues: NewTestCaseFormValues = {
     tokenExtractionPath: '',
     applyAs: 'BEARER_TOKEN',
   },
+  loadSource: 'PRESET',
+  preset: { peakRate: '50', duration: '5', timeUnit: 'MINUTES' },
   loadMode: 'CONSTANT',
   constant: { targetRate: '10', duration: '30', timeUnit: 'SECONDS' },
   ramp: {

@@ -1,0 +1,67 @@
+# Tempo receives traces only from Alloy (never directly from apps), and runs its
+# metrics-generator so RED metrics and service graphs are derived server-side
+# from spans. That is what lets the frontend skip a browser MeterProvider: the
+# histograms are generated here, where cardinality can be controlled.
+
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  log_level: warn
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+ingester:
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 168h
+
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+      cluster: taas-dev
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+  traces_storage:
+    path: /var/tempo/generator/traces
+  processor:
+    span_metrics:
+      # Deliberately narrow. test_run_id must never appear here: it is unbounded
+      # and would create a metric series per load test.
+      dimensions:
+        - service.name
+        - span.kind
+        - status.code
+    service_graphs:
+      dimensions:
+        - service.name
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors:
+        - service-graphs
+        - span-metrics
+usage_report:
+  reporting_enabled: false

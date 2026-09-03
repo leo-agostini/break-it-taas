@@ -1,7 +1,4 @@
 import type { AuthenticatedUser } from '@/lib/server-auth';
-import { atom } from 'recoil';
+import { atom } from 'jotai';
 
-export const currentUserAtom = atom<AuthenticatedUser | null>({
-  key: 'currentUser',
-  default: null,
-});
+export const currentUserAtom = atom<AuthenticatedUser | null>(null);

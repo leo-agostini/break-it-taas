@@ -118,7 +118,21 @@ export interface TestCaseSummary extends TestCase {
   runCount: number;
 }
 
-export type NewTestCaseInput = Omit<TestCase, 'id' | 'createdAt'>;
+/** Knobs the backend turns into the load shape prescribed for a test type. */
+export interface LoadPreset {
+  peakRate: number;
+  duration: number;
+  timeUnit: TimeUnit;
+}
+
+/** Exactly one of loadProfile / loadPreset is sent. */
+export type NewTestCaseInput = Omit<
+  TestCase,
+  'id' | 'createdAt' | 'loadProfile'
+> & {
+  loadProfile?: LoadProfile;
+  loadPreset?: LoadPreset;
+};
 
 export interface CreateTestCaseResult {
   testCaseId: string;

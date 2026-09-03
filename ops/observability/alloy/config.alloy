@@ -1,0 +1,177 @@
+// Grafana Alloy — the single telemetry collector for Break It TaaS.
+//
+// It plays three roles at once, which is why there is no separate
+// otel-collector, promtail or cadvisor container:
+//   1. OTLP receiver for app telemetry (browser, SSR, API, worker, cluster).
+//   2. Docker log tailer for every Compose container.
+//   3. cAdvisor scraper for per-container CPU/memory/network.
+//
+// Fan-out is always the same: traces -> Tempo, logs -> Loki, metrics -> Prometheus.
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// ── OTLP intake ───────────────────────────────────────────────────────────────
+// CORS is mandatory, not optional: the browser SDK POSTs to /v1/traces from
+// http://localhost:3000, a different origin than this receiver. Without these
+// headers the preflight fails and browser telemetry silently disappears.
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+
+    cors {
+      allowed_origins = ["*"]
+      allowed_headers = ["*"]
+    }
+  }
+
+  output {
+    traces  = [otelcol.processor.batch.default.input]
+    metrics = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.default.input]
+  }
+}
+
+otelcol.processor.batch "default" {
+  timeout             = "2s"
+  send_batch_size     = 512
+  send_batch_max_size = 1024
+
+  output {
+    traces  = [otelcol.exporter.otlp.tempo.input]
+    metrics = [otelcol.exporter.prometheus.default.input]
+    logs    = [otelcol.exporter.loki.default.input]
+  }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "tempo:4317"
+
+    tls {
+      insecure = true
+    }
+  }
+}
+
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.default.receiver]
+}
+
+// ── Compose container logs ────────────────────────────────────────────────────
+// Covers the API, frontend, Postgres and the load target. It does NOT cover the
+// outbox worker: that runs on the host, outside Docker, so it ships its own logs
+// over OTLP instead (LOG_EXPORT=otlp).
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  // Docker reports names as "/breakit-backend"; strip the leading slash.
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service_name"
+  }
+}
+
+loki.source.docker "containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.containers.output
+  labels     = { job = "docker", source = "compose" }
+  forward_to = [loki.process.app_logs.receiver]
+}
+
+// The API and worker emit pino JSON with a flat top-level trace_id. Lifting it
+// into a structured field is what makes Grafana's Loki -> Tempo jump work.
+// It is NOT promoted to a Loki label: trace_id is unbounded cardinality.
+loki.process "app_logs" {
+  stage.json {
+    expressions = {
+      level    = "level",
+      trace_id = "trace_id",
+      span_id  = "span_id",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// ── Container resource usage ──────────────────────────────────────────────────
+// This is what ADR-006 gave up when it moved to `docker stats`; cAdvisor gives
+// the granularity back. Verified to work on Docker Desktop for Mac: cgroup v2
+// controllers are visible from inside a container on this host.
+prometheus.exporter.cadvisor "docker" {
+  docker_host      = "unix:///var/run/docker.sock"
+  storage_duration = "5m"
+
+  // Only Docker-managed cgroups. Without this the exporter also walks every
+  // system cgroup on the host, which is noise we would pay to store.
+  docker_only = true
+}
+
+prometheus.scrape "cadvisor" {
+  targets         = prometheus.exporter.cadvisor.docker.targets
+  forward_to      = [prometheus.remote_write.default.receiver]
+  scrape_interval = "15s"
+  job_name        = "cadvisor"
+}
+
+prometheus.scrape "postgres" {
+  targets = [
+    { __address__ = "postgres-exporter:9187" },
+  ]
+  forward_to      = [prometheus.remote_write.default.receiver]
+  scrape_interval = "30s"
+  job_name        = "postgres"
+}
+
+// Alloy's own health, so the collector is never the blind spot.
+prometheus.exporter.self "alloy" {}
+
+prometheus.scrape "alloy" {
+  targets         = prometheus.exporter.self.alloy.targets
+  forward_to      = [prometheus.remote_write.default.receiver]
+  scrape_interval = "30s"
+  job_name        = "alloy"
+}
+
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}

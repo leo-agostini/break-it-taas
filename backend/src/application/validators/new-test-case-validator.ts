@@ -116,24 +116,40 @@ const executionPolicySchema = z.object({
   memoryMb: z.number().int().min(1).optional(),
 });
 
-export const newTestCaseSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().min(1).optional(),
-  ownerType: z.enum(TestCaseOwnerType),
-  ownerId: z.uuid(),
-  testType: z.enum(TestType),
-  targetSystem: z.object({
-    baseUrl: z.url(),
-    environment: z.string().min(1),
-  }),
-  authStrategy: authStrategySchema,
-  loadProfile: z.discriminatedUnion('mode', [
-    constantLoadProfileSchema,
-    rampLoadProfileSchema,
-  ]),
-  thresholdPolicy: thresholdPolicySchema,
-  executionPolicy: executionPolicySchema,
-  steps: z.array(stepSchema).default([]),
+const loadPresetSchema = z.object({
+  peakRate: z.number().int().min(1),
+  duration: z.number().int().min(1),
+  timeUnit: z.enum(TimeUnit),
 });
+
+export const newTestCaseSchema = z
+  .object({
+    name: z.string().min(1),
+    description: z.string().min(1).optional(),
+    ownerType: z.enum(TestCaseOwnerType),
+    ownerId: z.uuid(),
+    testType: z.enum(TestType),
+    targetSystem: z.object({
+      baseUrl: z.url(),
+      environment: z.string().min(1),
+    }),
+    authStrategy: authStrategySchema,
+    // Either author the profile by hand, or let the test type derive it.
+    loadProfile: z
+      .discriminatedUnion('mode', [
+        constantLoadProfileSchema,
+        rampLoadProfileSchema,
+      ])
+      .optional(),
+    loadPreset: loadPresetSchema.optional(),
+    thresholdPolicy: thresholdPolicySchema,
+    executionPolicy: executionPolicySchema,
+    steps: z.array(stepSchema).default([]),
+  })
+  .refine((value) => Boolean(value.loadProfile) !== Boolean(value.loadPreset), {
+    message:
+      'Provide exactly one of loadProfile (explicit stages) or loadPreset (derived from the test type)',
+    path: ['loadProfile'],
+  });
 
 export type NewTestCaseInput = z.infer<typeof newTestCaseSchema>;

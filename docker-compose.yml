@@ -1,17 +1,28 @@
+# Everything except the outbox worker runs here: the API, the frontend, the
+# database, and the target API the load tests hit.
+#
+# The outbox worker is deliberately absent. It dispatches Kubernetes Jobs and
+# needs a kubeconfig, so it runs on your host — ops/dev-up.sh starts it for you
+# after bringing this stack up.
+
 services:
-    # frontend:
-    #   build:
-    #     context: ./frontend
-    #     dockerfile: Dockerfile
-    #   container_name: breakit-frontend
-    #   ports:
-    #     - "3000:3000"
-    #   environment:
-    #     - NODE_ENV=production
-    #     - VITE_API_URL=http://localhost:3001
-    #   depends_on:
-    #     backend:
-    #       condition: service_started
+    frontend:
+        build:
+            # Repo root: frontend/Dockerfile copies tsconfig.base.json from the
+            # workspace root, so ./frontend is too narrow a context.
+            context: .
+            dockerfile: frontend/Dockerfile
+            args:
+                - VITE_API_URL=http://localhost:3001/api
+                - VITE_API_SERVER_URL=http://backend:3001/api
+        container_name: breakit-frontend
+        ports:
+            - "3000:3000"
+        environment:
+            - NODE_ENV=production
+        depends_on:
+            backend:
+                condition: service_started
 
     backend:
         build:
@@ -26,31 +37,13 @@ services:
             - JWT_SECRET=change-me-in-production
             - JWT_REFRESH_SECRET=change-me-refresh-in-production
             - RUNNER_SHARED_SECRET=local-runner-shared-secret
+            # The API only serves the callback endpoint; the worker is what
+            # tells runner pods where to POST. Kept because env.ts requires it.
             - RUNNER_CALLBACK_BASE_URL=http://localhost:3001
             - RUNNER_IMAGE=breakit-k6-runner:local
-            - K3S_NAMESPACE=app
-            - K3S_QUEUE_ENDPOINT=
+            - KUBERNETES_NAMESPACE=app
+            - KUBERNETES_QUEUE_ENDPOINT=
             - DATABASE_URL=postgres://postgres:postgres@postgres:5432/app
-        depends_on:
-            migrate:
-                condition: service_completed_successfully
-
-    outbox-worker:
-        build:
-            context: ./backend
-            dockerfile: Dockerfile
-        container_name: breakit-outbox-worker
-        environment:
-            - NODE_ENV=production
-            - JWT_SECRET=change-me-in-production
-            - JWT_REFRESH_SECRET=change-me-refresh-in-production
-            - RUNNER_SHARED_SECRET=local-runner-shared-secret
-            - RUNNER_CALLBACK_BASE_URL=http://localhost:3001
-            - RUNNER_IMAGE=breakit-k6-runner:local
-            - K3S_NAMESPACE=app
-            - K3S_QUEUE_ENDPOINT=
-            - DATABASE_URL=postgres://postgres:postgres@postgres:5432/app
-        command: ["bun", "run", "src/worker.ts"]
         depends_on:
             migrate:
                 condition: service_completed_successfully
@@ -85,5 +78,172 @@ services:
             timeout: 5s
             retries: 10
 
+    # The API under test. Runner pods reach it through the host gateway, so the
+    # port must be published. CPU is capped low on purpose — a load test is only
+    # interesting if it can actually saturate its target.
+    load-target:
+        image: hashicorp/http-echo:1.0.0
+        container_name: breakit-load-target
+        command: ["-listen=:8080", "-text=ok"]
+        ports:
+            - "8080:8080"
+        deploy:
+            resources:
+                limits:
+                    cpus: "0.1"
+                    memory: 160M
+
+    # ── Observability stack ───────────────────────────────────────────────────
+    # Opt-in via the "observability" profile so `docker compose up` stays light
+    # on a constrained machine:
+    #   docker compose --profile observability up -d
+    # These live in this file (rather than a separate one) on purpose: it puts
+    # them on the same default network, so `backend` and `frontend` can resolve
+    # `alloy` by name with no extra network wiring.
+
+    # The single collector: OTLP receiver, Docker log tailer, and cAdvisor
+    # scraper in one process. Replaces otel-collector + promtail + cadvisor.
+    alloy:
+        image: grafana/alloy:v1.18.1
+        container_name: breakit-alloy
+        profiles: ["observability"]
+        # Root is required to read the Docker socket; the socket itself is
+        # mounted read-only.
+        user: root
+        command:
+            - run
+            - --server.http.listen-addr=0.0.0.0:12345
+            - --storage.path=/var/lib/alloy/data
+            - /etc/alloy/config.alloy
+        ports:
+            - "4317:4317"   # OTLP gRPC
+            - "4318:4318"   # OTLP HTTP (browser exporter targets this)
+            - "12345:12345" # Alloy's own UI
+        volumes:
+            - ./ops/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            # cAdvisor needs these to enumerate per-container cgroups. Without
+            # them it reports only the root cgroup (id="/") and every
+            # per-container panel stays empty.
+            - /:/rootfs:ro
+            - /sys:/sys:ro
+            - /var/lib/docker:/var/lib/docker:ro
+            # cAdvisor talks to containerd to resolve the overlayfs storage
+            # driver. Without this it finds the container cgroups but fails with
+            # "unable to create containerd client" and emits no per-container
+            # series at all.
+            - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+            - alloy-data:/var/lib/alloy/data
+        depends_on:
+            - loki
+            - tempo
+            - prometheus
+        deploy:
+            resources:
+                limits:
+                    memory: 200M
+
+    prometheus:
+        image: prom/prometheus:v3.1.0
+        container_name: breakit-prometheus
+        profiles: ["observability"]
+        command:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=15d
+            # Required for Alloy, Tempo's generator, and k6 runner pods, which
+            # all push rather than being scraped.
+            - --web.enable-remote-write-receiver
+            # Lets a latency graph link straight to an example trace.
+            - --enable-feature=exemplar-storage
+            - --web.enable-lifecycle
+        ports:
+            - "9090:9090"
+        volumes:
+            - ./ops/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+            - ./ops/observability/prometheus/rules:/etc/prometheus/rules:ro
+            - prometheus-data:/prometheus
+        deploy:
+            resources:
+                limits:
+                    memory: 400M
+
+    loki:
+        image: grafana/loki:3.3.2
+        container_name: breakit-loki
+        profiles: ["observability"]
+        command: ["-config.file=/etc/loki/loki-config.yaml"]
+        ports:
+            - "3100:3100"
+        volumes:
+            - ./ops/observability/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+            - loki-data:/loki
+        deploy:
+            resources:
+                limits:
+                    memory: 300M
+
+    tempo:
+        image: grafana/tempo:2.7.0
+        container_name: breakit-tempo
+        profiles: ["observability"]
+        command: ["-config.file=/etc/tempo/tempo.yaml"]
+        ports:
+            - "3200:3200"
+        volumes:
+            - ./ops/observability/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+            - tempo-data:/var/tempo
+        deploy:
+            resources:
+                limits:
+                    memory: 300M
+
+    grafana:
+        image: grafana/grafana:11.5.1
+        container_name: breakit-grafana
+        profiles: ["observability"]
+        # 3000 is the frontend and 3001 the API, so Grafana takes 3002.
+        ports:
+            - "3002:3000"
+        environment:
+            - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+            - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+            - GF_USERS_ALLOW_SIGN_UP=false
+            - GF_FEATURE_TOGGLES_ENABLE=traceToMetrics
+            - GF_LOG_LEVEL=warn
+        volumes:
+            - ./ops/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+            - ./ops/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+            - grafana-data:/var/lib/grafana
+        depends_on:
+            - prometheus
+            - loki
+            - tempo
+        deploy:
+            resources:
+                limits:
+                    memory: 200M
+
+    postgres-exporter:
+        image: prometheuscommunity/postgres-exporter:v0.16.0
+        container_name: breakit-postgres-exporter
+        profiles: ["observability"]
+        environment:
+            - DATA_SOURCE_NAME=postgresql://postgres:postgres@postgres:5432/app?sslmode=disable
+        ports:
+            - "9187:9187"
+        depends_on:
+            postgres:
+                condition: service_healthy
+        deploy:
+            resources:
+                limits:
+                    memory: 64M
+
 volumes:
     postgres-data:
+    prometheus-data:
+    loki-data:
+    tempo-data:
+    grafana-data:
+    alloy-data:

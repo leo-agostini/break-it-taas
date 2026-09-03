@@ -4,7 +4,7 @@ import { db } from '@/infra/db/knex';
 import { KnexOutboxRepository } from '@/infra/db/repositories/knex-outbox-repository';
 import { KnexTestCaseRepository } from '@/infra/db/repositories/knex-test-case-repository';
 import { KnexTestRunRepository } from '@/infra/db/repositories/knex-test-run-repository';
-import { K3sTestRunQueue } from '@/infra/queue/k3s-test-run-queue';
+import { KubernetesTestRunQueue } from '@/infra/queue/kubernetes-test-run-queue';
 
 const pollIntervalMs = 5_000;
 const batchSize = 50;
@@ -13,7 +13,7 @@ const worker = new OutboxDispatcherWorker(
   new KnexOutboxRepository(),
   new KnexTestCaseRepository(),
   new KnexTestRunRepository(),
-  new K3sTestRunQueue(),
+  new KubernetesTestRunQueue(),
 );
 
 let shutdownRequested = false;
@@ -34,7 +34,7 @@ const timer = setInterval(runCycle, pollIntervalMs);
 await runCycle();
 
 console.info(
-  `Outbox dispatcher worker started (interval=${pollIntervalMs}ms, batchSize=${batchSize}, endpoint=${env.K3S_QUEUE_ENDPOINT})`,
+  `Outbox dispatcher worker started (interval=${pollIntervalMs}ms, batchSize=${batchSize}, endpoint=${env.KUBERNETES_QUEUE_ENDPOINT})`,
 );
 
 const shutdown = async () => {

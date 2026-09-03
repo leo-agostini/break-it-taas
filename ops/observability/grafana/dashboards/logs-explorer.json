@@ -1,0 +1,88 @@
+{
+  "uid": "breakit-logs",
+  "title": "Logs Explorer",
+  "tags": ["breakit", "logs"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "label": "Service",
+        "type": "query",
+        "datasource": { "type": "loki", "uid": "loki" },
+        "query": { "label": "service_name", "refId": "svc", "type": 1 },
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "search",
+        "label": "Search",
+        "type": "textbox",
+        "query": "",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Log volume by level",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "none", "custom": { "fillOpacity": 30, "showPoints": "never", "stacking": { "mode": "normal" } } },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (level) (count_over_time({job=\"docker\"} |= \"$search\" [1m]))",
+          "legendFormat": "{{level}}"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "All logs (click a line to jump to its trace)",
+      "description": "Compose containers arrive via Docker log tailing. The outbox worker runs on the host, outside Docker, so it ships logs over OTLP instead.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 6 },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=~\"$service\"} |= \"$search\""
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Errors only",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 22 },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{service_name=~\"$service\"} | level =~ \"error|fatal\""
+        }
+      ]
+    }
+  ]
+}

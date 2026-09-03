@@ -7,6 +7,7 @@ WORKDIR /k6-runner
 
 COPY run.sh /k6-runner/run.sh
 COPY script.js /k6-runner/script.js
+COPY profile.js /k6-runner/profile.js
 
 RUN chmod +x /k6-runner/run.sh
 

@@ -1,6 +1,7 @@
 import type { TestRunMetricsProjection } from '@/application/repositories/test-run-metrics-repository';
 import type { TestCase } from '@/domain/entities/test-case';
 import type { TestRunStatus } from '@/domain/entities/test-run';
+import { loadProfileDurationSeconds } from '@/domain/services/load-profile-duration';
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -40,6 +41,11 @@ const getMetricValue = (
   field: string,
 ): number | undefined => {
   const metric = readMetric(metrics, metricName);
+  // k6 reports the same metric two ways: --summary-export flattens the fields
+  // onto the metric, handleSummary nests them under `values`. Accept both so
+  // the projection does not depend on which writer produced the summary.
+  const nested = asNumber(asRecord(metric.values)[field]);
+  if (typeof nested === 'number') return nested;
   return asNumber(metric[field]);
 };
 
@@ -65,27 +71,8 @@ const pickFirstNumber = (
 };
 
 const toRequestedDurationSeconds = (testCase: TestCase): number | undefined => {
-  if (testCase.loadProfile.mode === 'CONSTANT') {
-    const duration = asNumber(
-      (testCase.loadProfile.config as Record<string, unknown>).duration,
-    );
-    const timeUnit = String(
-      (testCase.loadProfile.config as Record<string, unknown>).timeUnit ??
-        'SECONDS',
-    ).toUpperCase();
-    if (!duration) return undefined;
-    if (timeUnit === 'MINUTES') return duration * 60;
-    if (timeUnit === 'HOURS') return duration * 3600;
-    return duration;
-  }
-
-  const stages = (testCase.loadProfile.config as Record<string, unknown>)
-    .stages;
-  if (!Array.isArray(stages)) return undefined;
-  return stages.reduce((acc, stage) => {
-    const row = asRecord(stage);
-    return acc + (asNumber(row.duration) ?? 0);
-  }, 0);
+  const seconds = loadProfileDurationSeconds(testCase.loadProfile);
+  return seconds > 0 ? seconds : undefined;
 };
 
 export const normalizeK6ResultMetrics = (args: {
@@ -99,6 +86,8 @@ export const normalizeK6ResultMetrics = (args: {
 }): TestRunMetricsProjection => {
   const summary = asRecord(args.resultSummary.summary);
   const metrics = asRecord(summary.metrics);
+  // Written by the runner's handleSummary alongside k6's own metrics.
+  const execution = asRecord(summary.execution);
 
   const loadConfig = args.testCase.loadProfile.config as Record<
     string,
@@ -117,7 +106,12 @@ export const normalizeK6ResultMetrics = (args: {
     'dropped_iterations',
     'count',
   );
-  const failureRate = getMetricValue(metrics, 'http_req_failed', 'value');
+  // Flat exports name this field `value`; the nested handleSummary shape calls
+  // the same number `rate`.
+  const failureRate = pickFirstNumber(
+    getMetricValue(metrics, 'http_req_failed', 'value'),
+    getMetricValue(metrics, 'http_req_failed', 'rate'),
+  );
   const successRate =
     typeof failureRate === 'number'
       ? Math.max(0, Math.min(1, 1 - failureRate))
@@ -168,5 +162,7 @@ export const normalizeK6ResultMetrics = (args: {
     medianMs: roundNumber(medianMs, 4),
     generatorLimited,
     timeoutsDetected: typeof waitingP95Ms === 'number' && waitingP95Ms >= 2900,
+    aborted: execution.aborted === true,
+    breakingPointRate: roundNumber(asNumber(execution.breakingPointRate), 4),
   };
 };

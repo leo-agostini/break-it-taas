@@ -90,3 +90,21 @@ export const loadModesByTestType: Record<
   AVG_LOAD: ['CONSTANT', 'RAMP'],
   STRESS: ['CONSTANT', 'RAMP'],
 };
+
+/**
+ * What each test type's derived load profile looks like, per the k6 test-types
+ * guide. Descriptive only — the backend owns the actual derivation, so this
+ * cannot drift into a second source of truth for the numbers.
+ */
+export const testTypeShapes: Record<TestType, string> = {
+  SMOKE:
+    'Holds a low constant rate for the whole run to prove the script works.',
+  AVG_LOAD:
+    'Ramps to the peak over 10% of the run, holds it for 80%, then ramps down.',
+  STRESS:
+    'Ramps to the peak over 20% of the run, holds it for 70%, then ramps down.',
+  SOAK: 'Holds the rate steady for the whole (long) run to expose slow leaks.',
+  SPIKE: 'Ramps hard to the peak and comes straight back down — no plateau.',
+  BREAKPOINT:
+    'Climbs continuously toward the peak and aborts the moment a threshold breaks, reporting the rate it reached.',
+};

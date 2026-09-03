@@ -11,7 +11,10 @@ import {
   toOptions,
 } from '@/features/test-cases/components/form-controls';
 import { StepsEditor } from '@/features/test-cases/components/steps-editor';
-import { loadModesByTestType } from '@/features/test-cases/lib/status';
+import {
+  loadModesByTestType,
+  testTypeShapes,
+} from '@/features/test-cases/lib/status';
 import {
   AUTH_KINDS,
   type NewTestCaseFormValues,
@@ -61,6 +64,7 @@ export function TestCaseForm({
   });
 
   const allowedModes = loadModesByTestType[testType];
+  const loadSource = useWatch({ control, name: 'loadSource' });
 
   // Keep the load mode legal whenever the test type changes — the backend
   // rejects incompatible pairings outright.
@@ -328,15 +332,12 @@ export function TestCaseForm({
         ) : null}
       </FormSection>
 
-      <FormSection
-        title="Load profile"
-        description={`${testType.replace('_', ' ')} supports ${allowedModes.join(' and ')} load.`}
-      >
-        <FormRow label="Mode" error={errors.loadMode?.message}>
+      <FormSection title="Load profile" description={testTypeShapes[testType]}>
+        <FormRow label="Shape" error={errors.loadSource?.message}>
           {({ labelId }) => (
             <Controller
               control={control}
-              name="loadMode"
+              name="loadSource"
               render={({ field }) => (
                 <ToggleGroup
                   type="single"
@@ -345,115 +346,167 @@ export function TestCaseForm({
                   value={field.value}
                   onValueChange={(value) => value && field.onChange(value)}
                 >
-                  {(['CONSTANT', 'RAMP'] as const).map((mode) => (
-                    <ToggleGroupItem
-                      key={mode}
-                      value={mode}
-                      disabled={!allowedModes.includes(mode)}
-                    >
-                      {mode}
-                    </ToggleGroupItem>
-                  ))}
+                  <ToggleGroupItem value="PRESET">
+                    Guided by test type
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="MANUAL">
+                    Manual stages
+                  </ToggleGroupItem>
                 </ToggleGroup>
               )}
             />
           )}
         </FormRow>
 
-        {loadMode === 'CONSTANT' ? (
+        {loadSource === 'PRESET' ? (
           <div className="grid gap-4 sm:grid-cols-3">
-            <FormRow
-              label="Target rate"
-              error={errors.constant?.targetRate?.message}
-            >
-              <Input placeholder="100" {...register('constant.targetRate')} />
+            <FormRow label="Peak rate" error={errors.preset?.peakRate?.message}>
+              <Input placeholder="100" {...register('preset.peakRate')} />
             </FormRow>
             <FormRow
-              label="Duration"
-              error={errors.constant?.duration?.message}
+              label="Total duration"
+              error={errors.preset?.duration?.message}
             >
-              <Input placeholder="60" {...register('constant.duration')} />
+              <Input placeholder="30" {...register('preset.duration')} />
             </FormRow>
             <SelectField
               control={control}
-              name="constant.timeUnit"
+              name="preset.timeUnit"
               label="Time unit"
-              options={toOptions(TIME_UNITS)}
+              options={toOptions(['SECONDS', 'MINUTES', 'HOURS'])}
             />
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <FormRow
-                label="Initial rate"
-                error={errors.ramp?.initialRate?.message}
-              >
-                <Input placeholder="0" {...register('ramp.initialRate')} />
-              </FormRow>
-              <SelectField
-                control={control}
-                name="ramp.timeUnit"
-                label="Time unit"
-                options={toOptions(TIME_UNITS)}
-              />
-            </div>
+        ) : null}
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Stages</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    stages.append({ target: '100', duration: '30' })
-                  }
+        {loadSource === 'MANUAL' ? (
+          <>
+            <FormRow label="Mode" error={errors.loadMode?.message}>
+              {({ labelId }) => (
+                <Controller
+                  control={control}
+                  name="loadMode"
+                  render={({ field }) => (
+                    <ToggleGroup
+                      type="single"
+                      variant="outline"
+                      aria-labelledby={labelId}
+                      value={field.value}
+                      onValueChange={(value) => value && field.onChange(value)}
+                    >
+                      {(['CONSTANT', 'RAMP'] as const).map((mode) => (
+                        <ToggleGroupItem
+                          key={mode}
+                          value={mode}
+                          disabled={!allowedModes.includes(mode)}
+                        >
+                          {mode}
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                  )}
+                />
+              )}
+            </FormRow>
+
+            {loadMode === 'CONSTANT' ? (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <FormRow
+                  label="Target rate"
+                  error={errors.constant?.targetRate?.message}
                 >
-                  <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-                  Add stage
-                </Button>
+                  <Input
+                    placeholder="100"
+                    {...register('constant.targetRate')}
+                  />
+                </FormRow>
+                <FormRow
+                  label="Duration"
+                  error={errors.constant?.duration?.message}
+                >
+                  <Input placeholder="60" {...register('constant.duration')} />
+                </FormRow>
+                <SelectField
+                  control={control}
+                  name="constant.timeUnit"
+                  label="Time unit"
+                  options={toOptions(TIME_UNITS)}
+                />
               </div>
-              {errors.ramp?.stages?.message ? (
-                <p className="text-xs text-destructive">
-                  {errors.ramp.stages.message}
-                </p>
-              ) : null}
-
-              {stages.fields.map((stage, index) => (
-                <div key={stage.id} className="flex items-start gap-2">
+            ) : (
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <FormRow
-                    error={errors.ramp?.stages?.[index]?.target?.message}
-                    className="flex-1"
+                    label="Initial rate"
+                    error={errors.ramp?.initialRate?.message}
                   >
-                    <Input
-                      placeholder="target rate"
-                      {...register(`ramp.stages.${index}.target`)}
-                    />
+                    <Input placeholder="0" {...register('ramp.initialRate')} />
                   </FormRow>
-                  <FormRow
-                    error={errors.ramp?.stages?.[index]?.duration?.message}
-                    className="flex-1"
-                  >
-                    <Input
-                      placeholder="duration"
-                      {...register(`ramp.stages.${index}.duration`)}
-                    />
-                  </FormRow>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    disabled={stages.fields.length === 1}
-                    onClick={() => stages.remove(index)}
-                    aria-label="Remove stage"
-                  >
-                    <Trash2 className="h-4 w-4" aria-hidden="true" />
-                  </Button>
+                  <SelectField
+                    control={control}
+                    name="ramp.timeUnit"
+                    label="Time unit"
+                    options={toOptions(TIME_UNITS)}
+                  />
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Stages</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        stages.append({ target: '100', duration: '30' })
+                      }
+                    >
+                      <Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                      Add stage
+                    </Button>
+                  </div>
+                  {errors.ramp?.stages?.message ? (
+                    <p className="text-xs text-destructive">
+                      {errors.ramp.stages.message}
+                    </p>
+                  ) : null}
+
+                  {stages.fields.map((stage, index) => (
+                    <div key={stage.id} className="flex items-start gap-2">
+                      <FormRow
+                        error={errors.ramp?.stages?.[index]?.target?.message}
+                        className="flex-1"
+                      >
+                        <Input
+                          placeholder="target rate"
+                          {...register(`ramp.stages.${index}.target`)}
+                        />
+                      </FormRow>
+                      <FormRow
+                        error={errors.ramp?.stages?.[index]?.duration?.message}
+                        className="flex-1"
+                      >
+                        <Input
+                          placeholder="duration"
+                          {...register(`ramp.stages.${index}.duration`)}
+                        />
+                      </FormRow>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={stages.fields.length === 1}
+                        onClick={() => stages.remove(index)}
+                        aria-label="Remove stage"
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : null}
       </FormSection>
 
       <FormSection title="Thresholds">

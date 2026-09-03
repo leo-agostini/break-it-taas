@@ -12,6 +12,7 @@ import {
   ResourceProfile,
 } from '@/domain/vos/execution-policy';
 import { LoadMode, LoadProfile, TimeUnit } from '@/domain/vos/load-profile';
+import { Stage } from '@/domain/vos/stage';
 import { CheckKind, HttpMethod, Step } from '@/domain/vos/step';
 import { TargetSystem } from '@/domain/vos/target-system';
 import { ThresholdPolicy } from '@/domain/vos/threshold-policy';
@@ -75,5 +76,102 @@ describe('normalizeK6ResultMetrics', () => {
     expect(projection.p95Ms).toBe(3000.4089);
     expect(projection.p99Ms).toBe(3000.4089);
     expect(projection.medianMs).toBe(1470.851);
+  });
+
+  it('reads metrics from the nested handleSummary shape as well as the flat one', () => {
+    // --summary-export emits {http_reqs: {rate, count}}; handleSummary emits
+    // {http_reqs: {values: {rate, count}}}. Both must project identically.
+    const projection = normalizeK6ResultMetrics({
+      testRunId: crypto.randomUUID(),
+      status: TestRunStatus.SUCCEEDED,
+      runtimeRef: 'testrun-nested',
+      completedAt: new Date().toISOString(),
+      artifacts: [],
+      testCase: makeTestCase(),
+      resultSummary: {
+        summary: {
+          metrics: {
+            http_reqs: { values: { rate: 120.5, count: 3600 } },
+            http_req_failed: { values: { rate: 0.25 } },
+            http_req_duration: { values: { 'p(95)': 812.5, med: 300.25 } },
+            dropped_iterations: { values: { count: 12 } },
+          },
+        },
+      },
+    });
+
+    expect(projection.achievedRps).toBe(120.5);
+    expect(projection.totalRequests).toBe(3600);
+    expect(projection.failureRate).toBe(0.25);
+    expect(projection.p95Ms).toBe(812.5);
+    expect(projection.droppedIterations).toBe(12);
+    expect(projection.generatorLimited).toBe(true);
+  });
+
+  it('records where a breakpoint run aborted', () => {
+    const projection = normalizeK6ResultMetrics({
+      testRunId: crypto.randomUUID(),
+      status: TestRunStatus.SUCCEEDED,
+      runtimeRef: 'testrun-breakpoint',
+      completedAt: new Date().toISOString(),
+      artifacts: [],
+      testCase: makeTestCase(),
+      resultSummary: {
+        summary: {
+          metrics: {},
+          execution: { aborted: true, breakingPointRate: 1487.25 },
+        },
+      },
+    });
+
+    expect(projection.aborted).toBe(true);
+    expect(projection.breakingPointRate).toBe(1487.25);
+  });
+
+  it('reports a run that held its thresholds as not aborted', () => {
+    const projection = normalizeK6ResultMetrics({
+      testRunId: crypto.randomUUID(),
+      status: TestRunStatus.SUCCEEDED,
+      runtimeRef: 'testrun-ok',
+      completedAt: new Date().toISOString(),
+      artifacts: [],
+      testCase: makeTestCase(),
+      resultSummary: {
+        summary: {
+          metrics: {},
+          execution: { aborted: false, breakingPointRate: null },
+        },
+      },
+    });
+
+    expect(projection.aborted).toBe(false);
+    expect(projection.breakingPointRate).toBeUndefined();
+  });
+
+  it('reports the requested duration of a RAMP profile in its own time unit', () => {
+    const testCase = makeTestCase();
+    testCase.testType = TestType.AVG_LOAD;
+    testCase.loadProfile = LoadProfile.create(LoadMode.RAMP, {
+      initialRate: 1,
+      timeUnit: TimeUnit.MINUTES,
+      stages: [
+        new Stage({ target: 100, duration: 5 }),
+        new Stage({ target: 100, duration: 30 }),
+        new Stage({ target: 0, duration: 5 }),
+      ],
+    });
+
+    const projection = normalizeK6ResultMetrics({
+      testRunId: crypto.randomUUID(),
+      status: TestRunStatus.SUCCEEDED,
+      runtimeRef: 'testrun-ramp',
+      completedAt: new Date().toISOString(),
+      artifacts: [],
+      testCase,
+      resultSummary: { summary: { metrics: {} } },
+    });
+
+    // 40 minutes of stages, not 40 seconds.
+    expect(projection.requestedDurationSeconds).toBe(2_400);
   });
 });

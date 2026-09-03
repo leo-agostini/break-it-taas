@@ -15,6 +15,7 @@ COPY frontend/vite.config.ts ./
 COPY frontend/tailwind.config.ts ./
 COPY frontend/postcss.config.cjs ./
 COPY frontend/components.json ./
+COPY frontend/public ./public
 COPY frontend/src ./src
 
 RUN npm install

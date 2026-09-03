@@ -1,8 +1,8 @@
 import { Toaster } from '@/components/ui/sonner';
+import { Provider } from 'jotai';
 import { ThemeProvider } from 'next-themes';
 import type { ReactNode } from 'react';
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router';
-import { RecoilRoot } from 'recoil';
 import { SWRConfig } from 'swr';
 import './app.css';
 
@@ -19,7 +19,7 @@ export function Layout({ children }: { children: ReactNode }) {
         style={{ width: '100vw', height: '100vh', boxSizing: 'border-box' }}
       >
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <RecoilRoot>
+          <Provider>
             <SWRConfig
               value={{
                 revalidateOnFocus: true,
@@ -36,7 +36,7 @@ export function Layout({ children }: { children: ReactNode }) {
               {children}
               <Toaster />
             </SWRConfig>
-          </RecoilRoot>
+          </Provider>
         </ThemeProvider>
         <ScrollRestoration />
         <Scripts />

@@ -22,7 +22,29 @@ if [ "$actual_hmac" != "$RUN_CONFIG_HMAC" ]; then
   status="FAILED"
   error_message="config_hmac_mismatch"
 else
-  if ! k6 run --summary-export /tmp/summary.json /k6-runner/script.js; then
+  # The config is HMAC-verified above, so reading the test type back out of it
+  # needs no separate (unsigned) env var.
+  is_breakpoint=0
+  case "$RUN_CONFIG_JSON" in
+    *'"testType":"BREAKPOINT"'*) is_breakpoint=1 ;;
+  esac
+
+  # script.js writes /tmp/summary.json from handleSummary; passing
+  # --summary-export as well would put two writers on the same path.
+  exit_code=0
+  k6 run /k6-runner/script.js || exit_code=$?
+
+  if [ "$exit_code" -eq 99 ]; then
+    # k6 exit 99 means a threshold was breached. For a breakpoint test that is
+    # the point of the run — it found the system's limit — so it is not a
+    # failure. For every other type, a breached threshold is a real failure.
+    if [ "$is_breakpoint" -eq 1 ]; then
+      status="SUCCEEDED"
+    else
+      status="FAILED"
+      error_message="thresholds_breached"
+    fi
+  elif [ "$exit_code" -ne 0 ]; then
     status="FAILED"
     error_message="k6_execution_failed"
   fi

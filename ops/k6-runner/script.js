@@ -1,103 +1,29 @@
-import http from 'k6/http';
 import { check } from 'k6';
+import http from 'k6/http';
+import {
+  buildScenario,
+  buildThresholds,
+  needsResponseBodies,
+  resolveBreakingPoint,
+  thresholdsBreached,
+} from './profile.js';
 
 const config = JSON.parse(__ENV.RUN_CONFIG_JSON || '{}');
 const loadProfile = config.loadProfile || { mode: 'CONSTANT', config: {} };
 
-const TIME_UNIT_TO_SECONDS = {
-  SECONDS: 1,
-  MINUTES: 60,
-  HOURS: 3600,
-};
-
-const estimateVuEnvelope = (ratePerTimeUnit, timeUnit) => {
-  const expectedResponseTimeMs = Math.max(
-    1,
-    Number(loadProfile.config.expectedResponseTimeMs || 50),
-  );
-  const secondsPerTimeUnit = timeUnit === '1m' ? 60 : timeUnit === '1h' ? 3600 : 1;
-  const ratePerSecond = Math.max(1, Number(ratePerTimeUnit || 1)) / secondsPerTimeUnit;
-  const estimatedConcurrent = ratePerSecond * (expectedResponseTimeMs / 1000);
-  const preAllocatedVUs = Math.max(1, Math.ceil(estimatedConcurrent * 2));
-  const defaultMaxCap = 2000;
-  const configuredMaxCap = Number(config.maxVUsCap || __ENV.K6_MAX_VUS_CAP || defaultMaxCap);
-  const maxCap = Number.isFinite(configuredMaxCap) && configuredMaxCap > 0 ? configuredMaxCap : defaultMaxCap;
-  const maxVUs = Math.min(maxCap, Math.max(preAllocatedVUs + 10, Math.ceil(estimatedConcurrent * 6)));
-
-  return { preAllocatedVUs, maxVUs };
-};
-
-const toK6Duration = (duration, timeUnit) => {
-  const unit = (timeUnit || 'SECONDS').toUpperCase();
-  const totalSeconds = Math.max(1, Number(duration || 1)) * (TIME_UNIT_TO_SECONDS[unit] || 1);
-  return `${totalSeconds}s`;
-};
-
-const toK6TimeUnit = (timeUnit) => {
-  const unit = (timeUnit || 'SECONDS').toUpperCase();
-  if (unit === 'MINUTES') return '1m';
-  if (unit === 'HOURS') return '1h';
-  return '1s';
-};
-
-const buildScenario = () => {
-  if (loadProfile.mode === 'RAMP') {
-    const stages = Array.isArray(loadProfile.config.stages) ? loadProfile.config.stages : [];
-    const initialRate = Math.max(1, Number(loadProfile.config.initialRate || 1));
-    const timeUnit = toK6TimeUnit(loadProfile.config.timeUnit);
-    const mappedStages = stages.map((stage) => ({
-      target: Math.max(1, Number(stage.target || 1)),
-      duration: toK6Duration(stage.duration, loadProfile.config.timeUnit),
-    }));
-    const maxTarget = mappedStages.reduce((acc, item) => Math.max(acc, item.target), initialRate);
-    const vus = estimateVuEnvelope(maxTarget, timeUnit);
-
-    return {
-      executor: 'ramping-arrival-rate',
-      startRate: initialRate,
-      timeUnit,
-      preAllocatedVUs: vus.preAllocatedVUs,
-      maxVUs: vus.maxVUs,
-      stages: mappedStages.length > 0 ? mappedStages : [{ target: initialRate, duration: '10s' }],
-    };
-  }
-
-  const targetRate = Math.max(1, Number(loadProfile.config.targetRate || 1));
-  const duration = toK6Duration(loadProfile.config.duration, loadProfile.config.timeUnit);
-  const timeUnit = toK6TimeUnit(loadProfile.config.timeUnit);
-  const vus = estimateVuEnvelope(targetRate, timeUnit);
-
-  return {
-    executor: 'constant-arrival-rate',
-    duration,
-    rate: targetRate,
-    timeUnit,
-    preAllocatedVUs: vus.preAllocatedVUs,
-    maxVUs: vus.maxVUs,
-  };
-};
-
-const scenario = buildScenario();
-
-const thresholdPolicy = config.thresholdPolicy || {};
-const thresholds = {};
-if (typeof thresholdPolicy.maxErrorRate === 'number') {
-  thresholds.http_req_failed = [`rate<${thresholdPolicy.maxErrorRate}`];
-}
-if (typeof thresholdPolicy.maxP95ResponseTimeMs === 'number') {
-  thresholds.http_req_duration = [...(thresholds.http_req_duration || []), `p(95)<${thresholdPolicy.maxP95ResponseTimeMs}`];
-}
-if (typeof thresholdPolicy.maxP99ResponseTimeMs === 'number') {
-  thresholds.http_req_duration = [...(thresholds.http_req_duration || []), `p(99)<${thresholdPolicy.maxP99ResponseTimeMs}`];
-}
+const scenario = buildScenario(loadProfile, {
+  maxVUsCap: Number(__ENV.K6_MAX_VUS_CAP) || undefined,
+});
 
 export const options = {
-  discardResponseBodies: true,
+  // Bodies cost memory, so they are only kept when a step actually asserts on
+  // their content.
+  discardResponseBodies: !needsResponseBodies(config.steps),
   summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   scenarios: {
     test_run: scenario,
   },
-  thresholds,
+  thresholds: buildThresholds(config.thresholdPolicy),
 };
 
 function buildUrl(step) {
@@ -149,27 +75,28 @@ export default function () {
 }
 
 export function handleSummary(data) {
-  const metrics = data.metrics || {};
-  const httpReqs = metrics.http_reqs || {};
-  const httpReqDuration = metrics.http_req_duration || {};
-  const httpReqFailed = metrics.http_req_failed || {};
+  const elapsedSeconds = Number(data.state?.testRunDurationMs || 0) / 1000;
+  const aborted = thresholdsBreached(data);
 
-  const enriched = {
-    k6: data,
-    execution: {
-      scenario: scenario.executor,
-      configuredRate: scenario.rate ?? scenario.startRate ?? null,
-      configuredTimeUnit: scenario.timeUnit ?? null,
-      achievedRps: httpReqs.rate ?? null,
-      p95Ms: httpReqDuration.values?.['p(95)'] ?? null,
-      p99Ms: httpReqDuration.values?.['p(99)'] ?? null,
-      failureRate: httpReqFailed.values?.rate ?? null,
-      vusMax: metrics.vus_max?.values?.value ?? null,
-      cpuLimitSaturated: null,
-    },
-  };
-
+  // Spread k6's own summary at the top level: the backend projection reads
+  // `summary.metrics.*`, and this is the only writer of the file now that
+  // run.sh no longer passes --summary-export.
   return {
-    '/tmp/summary.json': JSON.stringify(enriched),
+    '/tmp/summary.json': JSON.stringify({
+      ...data,
+      execution: {
+        testType: config.testType || null,
+        scenario: scenario.executor,
+        configuredRate: scenario.rate ?? scenario.startRate ?? null,
+        configuredTimeUnit: scenario.timeUnit ?? null,
+        elapsedSeconds,
+        aborted,
+        // Where the system gave out — the number a BREAKPOINT test exists for.
+        breakingPointRate: aborted
+          ? resolveBreakingPoint(loadProfile, elapsedSeconds)
+          : null,
+        vusMax: data.metrics?.vus_max?.values?.value ?? null,
+      },
+    }),
   };
 }

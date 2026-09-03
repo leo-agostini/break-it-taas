@@ -31,6 +31,8 @@ export interface TestRunMetricsSummary {
   medianMs?: number;
   generatorLimited: boolean;
   timeoutsDetected: boolean;
+  aborted: boolean;
+  breakingPointRate?: number;
 }
 
 export interface TestCaseRunSummary extends TestRun {
@@ -56,10 +58,12 @@ export interface TestRunReport {
     p95Ms?: number;
     p99Ms?: number;
     medianMs?: number;
+    breakingPointRate?: number;
   };
   flags: {
     generatorLimited: boolean;
     timeoutsDetected: boolean;
+    aborted: boolean;
   };
   artifacts: string[];
 }
