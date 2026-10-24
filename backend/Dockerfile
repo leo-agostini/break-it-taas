@@ -1,14 +1,23 @@
-FROM oven/bun:1.2.13
+# Build: compile TypeScript with the Adonis assembler into ./build.
+FROM node:24-slim AS build
 
 WORKDIR /app
 
 COPY package.json ./
-COPY tsconfig.json ./
-COPY knexfile.ts ./
-COPY src ./src
+RUN npm install
 
-RUN bun install
+COPY . .
+RUN node ace build
+
+# Runtime: only the compiled app and production dependencies.
+FROM node:24-slim
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+COPY --from=build /app/build ./
+RUN npm install --omit=dev
 
 EXPOSE 3001
 
-CMD ["bun", "run", "src/index.ts"]
+CMD ["node", "bin/server.js"]

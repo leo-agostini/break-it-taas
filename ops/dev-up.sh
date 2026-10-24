@@ -22,7 +22,7 @@ SKIP_WORKER="${SKIP_WORKER:-0}"
 require_command docker
 require_command kind
 require_command kubectl
-require_command bun
+require_node_24
 
 log "[1/6] Ensuring kind cluster '${WORKLOAD_CLUSTER_NAME}'"
 bash "${SCRIPT_DIR}/kind/bootstrap-workload.sh"
@@ -78,6 +78,11 @@ exec env \
   RUNNER_CALLBACK_BASE_URL="${CALLBACK_BASE_URL}" \
   RUNNER_IMAGE="${RUNNER_IMAGE}" \
   RUNNER_SHARED_SECRET="${RUNNER_SHARED_SECRET:-local-runner-shared-secret}" \
-  JWT_SECRET="${JWT_SECRET:-change-me-in-production}" \
-  JWT_REFRESH_SECRET="${JWT_REFRESH_SECRET:-change-me-refresh-in-production}" \
+  APP_KEY="${APP_KEY:-local-dev-app-key-change-me-in-production}" \
+  NODE_ENV="${NODE_ENV:-development}" \
+  PORT="${PORT:-${API_PORT}}" \
+  HOST="${HOST:-0.0.0.0}" \
+  LOG_LEVEL="${LOG_LEVEL:-info}" \
+  APP_URL="${APP_URL:-http://localhost:${API_PORT}}" \
+  SESSION_DRIVER="${SESSION_DRIVER:-cookie}" \
   npm --workspace backend run worker:dev

@@ -1,4 +1,11 @@
 node_modules
-dist
-bun.lockb
+build
+tmp
+.adonisjs
+.env
+.env.test
 *.log
+# Tests (and their entrypoint) are not part of the runtime image; some import
+# from ops/, which is outside this build context.
+tests
+bin/test.ts

@@ -18,7 +18,7 @@ API_HEALTH_URL="${API_HEALTH_URL:-http://localhost:${API_PORT}/api/health}"
 
 require_command docker
 require_command kubectl
-require_command bun
+require_node_24
 
 log "[1/4] Checking cluster context '${WORKLOAD_CONTEXT}'"
 kube cluster-info >/dev/null 2>&1 ||

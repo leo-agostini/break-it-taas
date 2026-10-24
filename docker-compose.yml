@@ -5,6 +5,30 @@
 # needs a kubeconfig, so it runs on your host — ops/dev-up.sh starts it for you
 # after bringing this stack up.
 
+# Shared by the API and the one-shot migrate container: Adonis validates the
+# whole env schema (start/env.ts) at boot, whichever command runs.
+x-backend-env: &backend-env
+    NODE_ENV: production
+    PORT: "3001"
+    HOST: 0.0.0.0
+    LOG_LEVEL: info
+    # Local-only key; production must inject its own secret.
+    APP_KEY: local-dev-app-key-change-me-in-production
+    APP_URL: http://localhost:3001
+    # The session cookie is the auth credential (ADR-008). Frontend and API are
+    # both on localhost here, so Lax + non-Secure works over plain http.
+    SESSION_DRIVER: cookie
+    SESSION_SAMESITE: lax
+    SESSION_SECURE: "false"
+    CORS_ORIGIN: http://localhost:3000
+    RUNNER_SHARED_SECRET: local-runner-shared-secret
+    # The API only serves the callback endpoint; the worker is what tells
+    # runner pods where to POST. Kept because the env schema requires it.
+    RUNNER_CALLBACK_BASE_URL: http://localhost:3001
+    RUNNER_IMAGE: breakit-k6-runner:local
+    KUBERNETES_NAMESPACE: app
+    DATABASE_URL: postgres://postgres:postgres@postgres:5432/app
+
 services:
     frontend:
         build:
@@ -31,19 +55,7 @@ services:
         container_name: breakit-backend
         ports:
             - "3001:3001"
-        environment:
-            - NODE_ENV=production
-            - PORT=3001
-            - JWT_SECRET=change-me-in-production
-            - JWT_REFRESH_SECRET=change-me-refresh-in-production
-            - RUNNER_SHARED_SECRET=local-runner-shared-secret
-            # The API only serves the callback endpoint; the worker is what
-            # tells runner pods where to POST. Kept because env.ts requires it.
-            - RUNNER_CALLBACK_BASE_URL=http://localhost:3001
-            - RUNNER_IMAGE=breakit-k6-runner:local
-            - KUBERNETES_NAMESPACE=app
-            - KUBERNETES_QUEUE_ENDPOINT=
-            - DATABASE_URL=postgres://postgres:postgres@postgres:5432/app
+        environment: *backend-env
         depends_on:
             migrate:
                 condition: service_completed_successfully
@@ -53,10 +65,15 @@ services:
             context: ./backend
             dockerfile: Dockerfile
         container_name: breakit-migrate
-        environment:
-            - NODE_ENV=production
-            - DATABASE_URL=postgres://postgres:postgres@postgres:5432/app
-        command: ["bun", "run", "migrate:latest"]
+        environment: *backend-env
+        # db:adopt-knex is a no-op except on a volume first migrated by the
+        # pre-Adonis Knex runner, which it hands over to Lucid's bookkeeping.
+        command:
+            [
+                "sh",
+                "-c",
+                "node ace db:adopt-knex && node ace migration:run --force",
+            ]
         depends_on:
             postgres:
                 condition: service_healthy

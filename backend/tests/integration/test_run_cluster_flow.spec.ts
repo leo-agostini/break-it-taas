@@ -1,12 +1,21 @@
-import { describe, expect, it } from 'bun:test';
+import { spawnSync } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { test } from '@japa/runner';
+import pg from 'pg';
+
+// Runs against the live stack started by ops/dev-up.sh, not against the test
+// server: the API, worker, kind cluster and load target must all be up.
 
 const baseUrl = process.env.INTEGRATION_BASE_URL ?? 'http://localhost:3001';
 const kubeContext =
   process.env.INTEGRATION_KUBECONFIG_CONTEXT ?? 'kind-taas-dev';
 // PostgreSQL lives outside the cluster (Docker Compose locally), so the suite
 // connects to it directly rather than exec'ing into an in-cluster StatefulSet.
+// Read from its own variable: under `node ace test`, DATABASE_URL is the
+// isolated *_test database, not the one the running API writes to.
 const databaseUrl =
-  process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/app';
+  process.env.INTEGRATION_DATABASE_URL ??
+  'postgres://postgres:postgres@localhost:5432/app';
 // The load target runs in Docker Compose, so it is measured with `docker
 // stats` rather than `kubectl top`.
 const targetContainer =
@@ -65,7 +74,8 @@ function resolveTargetBaseUrl(): string {
 }
 
 const shouldRun = process.env.RUN_CLUSTER_INTEGRATION === '1';
-const suite = shouldRun ? describe : describe.skip;
+const skipReason =
+  'Cluster integration is opt-in: npm --workspace backend run test:integration';
 
 type TestRunStatus =
   | 'CREATED'
@@ -84,30 +94,27 @@ const terminalStatuses = new Set<TestRunStatus>([
 ]);
 
 function runCommand(command: string[]): string {
-  const proc = Bun.spawnSync(command, {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
+  const [bin, ...args] = command;
+  const proc = spawnSync(bin, args, { encoding: 'utf8' });
 
-  if (proc.exitCode !== 0) {
-    const stderr = new TextDecoder().decode(proc.stderr).trim();
-    throw new Error(`Command failed: ${command.join(' ')}\n${stderr}`);
+  if (proc.status !== 0) {
+    throw new Error(
+      `Command failed: ${command.join(' ')}\n${(proc.stderr ?? '').trim()}`,
+    );
   }
 
-  return new TextDecoder().decode(proc.stdout).trim();
+  return (proc.stdout ?? '').trim();
 }
 
 function tryRunCommand(command: string[]): string | null {
-  const proc = Bun.spawnSync(command, {
-    stdout: 'pipe',
-    stderr: 'pipe',
-  });
+  const [bin, ...args] = command;
+  const proc = spawnSync(bin, args, { encoding: 'utf8' });
 
-  if (proc.exitCode !== 0) {
+  if (proc.status !== 0) {
     return null;
   }
 
-  return new TextDecoder().decode(proc.stdout).trim();
+  return (proc.stdout ?? '').trim();
 }
 
 async function poll<T>(
@@ -125,7 +132,7 @@ async function poll<T>(
         `Polling timeout after ${timeoutMs}ms. Last value: ${JSON.stringify(latest)}`,
       );
     }
-    await Bun.sleep(intervalMs);
+    await sleep(intervalMs);
     latest = await fn();
   }
 
@@ -143,35 +150,41 @@ async function signup(email: string) {
       password: 'StrongPass!2345',
     }),
   });
-  expect(response.status).toBe(201);
+  if (response.status !== 201) {
+    throw new Error(`Signup failed with ${response.status}`);
+  }
   return (await response.json()) as { id: string };
 }
 
+/**
+ * Logs in and returns the `Cookie` header that carries the session (ADR-008).
+ */
 async function signin(email: string) {
   const response = await fetch(`${baseUrl}/api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password: 'StrongPass!2345' }),
   });
-  expect(response.status).toBe(200);
-  const accessCookie = response.headers
+  if (response.status !== 200) {
+    throw new Error(`Login failed with ${response.status}`);
+  }
+
+  const sessionCookie = response.headers
     .getSetCookie()
-    .find((c) => c.startsWith('access_token='));
-  const token = accessCookie
-    ? decodeURIComponent(
-        accessCookie.split(';')[0].slice('access_token='.length),
-      )
-    : '';
-  expect(token.length).toBeGreaterThan(10);
-  return token;
+    .find((cookie) => cookie.startsWith('breakit-session='));
+  if (!sessionCookie) {
+    throw new Error('Login did not set the session cookie');
+  }
+
+  return sessionCookie.split(';')[0];
 }
 
-async function createTestCase(token: string, ownerId: string) {
+async function createTestCase(sessionCookie: string, ownerId: string) {
   const response = await fetch(`${baseUrl}/api/test-cases`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      Cookie: sessionCookie,
     },
     body: JSON.stringify({
       name: 'Integration Flow Smoke',
@@ -212,7 +225,11 @@ async function createTestCase(token: string, ownerId: string) {
     }),
   });
 
-  expect(response.status).toBe(201);
+  if (response.status !== 201) {
+    throw new Error(
+      `Creating the test case failed with ${response.status}: ${await response.text()}`,
+    );
+  }
 
   return (await response.json()) as {
     testCaseId: string;
@@ -246,17 +263,15 @@ async function getTargetCpuMilli(): Promise<number | null> {
 }
 
 async function querySingleValue(sql: string): Promise<string> {
-  // Uses knex (already a backend dependency, and typed) rather than the raw pg
-  // client, which ships no types. A short-lived instance per query keeps the
-  // suite from leaking a connection pool.
-  const { default: knex } = await import('knex');
-  const client = knex({ client: 'pg', connection: databaseUrl });
+  // A short-lived client per query keeps the suite from leaking a pool.
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
   try {
-    const result = await client.raw(sql);
+    const result = await client.query(sql);
     const row = result.rows[0];
     return row ? String(Object.values(row)[0]) : '';
   } finally {
-    await client.destroy();
+    await client.end();
   }
 }
 
@@ -294,7 +309,7 @@ async function resultExists(runId: string): Promise<boolean> {
 }
 
 async function createTypedTestCase(
-  token: string,
+  sessionCookie: string,
   ownerId: string,
   overrides: Record<string, unknown>,
 ) {
@@ -302,7 +317,7 @@ async function createTypedTestCase(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      Cookie: sessionCookie,
     },
     body: JSON.stringify({
       name: 'Integration Typed Run',
@@ -335,7 +350,11 @@ async function createTypedTestCase(
     testRunId?: string;
     error?: { message?: string };
   };
-  expect(response.status).toBe(201);
+  if (response.status !== 201) {
+    throw new Error(
+      `Creating the test case failed with ${response.status}: ${body.error?.message}`,
+    );
+  }
 
   return body as { testCaseId: string; testRunId: string };
 }
@@ -366,13 +385,15 @@ async function readMetricsRow(
   };
 }
 
-suite('cluster test run integration flow', () => {
-  it('runs signup->signin->test-case and finishes with runner pod + callback result', async () => {
+test.group('cluster test run integration flow', () => {
+  test('runs signup->signin->test-case and finishes with runner pod + callback result', async ({
+    expect,
+  }) => {
     const email = `int-${Date.now()}@example.com`;
 
     const user = await signup(email);
-    const token = await signin(email);
-    const created = await createTestCase(token, user.id);
+    const sessionCookie = await signin(email);
+    const created = await createTestCase(sessionCookie, user.id);
 
     const firstStatus = await poll(
       () => getRunStatus(created.testRunId),
@@ -421,14 +442,18 @@ suite('cluster test run integration flow', () => {
       const saturationRatio = observedPeakCpuMilli / targetCpuLimitMilli;
       expect(saturationRatio).toBeGreaterThanOrEqual(0.98);
     }
-  }, 180000);
+  })
+    .timeout(180000)
+    .skip(!shouldRun, skipReason);
 
-  it('runs a SPIKE derived from a preset with no plateau stage', async () => {
+  test('runs a SPIKE derived from a preset with no plateau stage', async ({
+    expect,
+  }) => {
     const email = `int-spike-${Date.now()}@example.com`;
     const user = await signup(email);
-    const token = await signin(email);
+    const sessionCookie = await signin(email);
 
-    const created = await createTypedTestCase(token, user.id, {
+    const created = await createTypedTestCase(sessionCookie, user.id, {
       testType: 'SPIKE',
       loadPreset: {
         peakRate: targetLoadRate,
@@ -462,14 +487,18 @@ suite('cluster test run integration flow', () => {
       3000,
     );
     expect(terminalStatuses.has(terminal)).toBe(true);
-  }, 240000);
+  })
+    .timeout(240000)
+    .skip(!shouldRun, skipReason);
 
-  it('stops a BREAKPOINT run at its breaking point and records the rate', async () => {
+  test('stops a BREAKPOINT run at its breaking point and records the rate', async ({
+    expect,
+  }) => {
     const email = `int-bp-${Date.now()}@example.com`;
     const user = await signup(email);
-    const token = await signin(email);
+    const sessionCookie = await signin(email);
 
-    const created = await createTypedTestCase(token, user.id, {
+    const created = await createTypedTestCase(sessionCookie, user.id, {
       testType: 'BREAKPOINT',
       loadPreset: {
         peakRate: targetLoadRate * 20,
@@ -504,5 +533,7 @@ suite('cluster test run integration flow', () => {
     const metrics = await readMetricsRow(created.testRunId);
     expect(metrics.aborted).toBe(true);
     expect(metrics.breakingPointRate).toBeGreaterThan(0);
-  }, 300000);
+  })
+    .timeout(300000)
+    .skip(!shouldRun, skipReason);
 });

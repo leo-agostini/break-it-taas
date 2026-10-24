@@ -1,8 +1,0 @@
-import type { AppContainer } from '@/infra/http/container';
-import type { AuthContext } from '@/infra/http/middlewares/authenticator';
-
-export function listTestCaseRunsController(container: AppContainer) {
-  return async (testCaseId: UUID, actor: AuthContext) => {
-    return container.listTestCaseRunsUseCase.execute(testCaseId, actor);
-  };
-}
