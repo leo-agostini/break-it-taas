@@ -29,19 +29,18 @@ Frontend:
 
 Backend:
 
-- Bun
-- Elysia
-- PostgreSQL with Knex
-- Zod
-- JWT
+- AdonisJS v7 on Node.js 24 (modular monolith, see `docs/02-architecture/backend-architecture.md`)
+- PostgreSQL with Lucid
+- VineJS
+- Session auth (`@adonisjs/auth` + `@adonisjs/session`)
+- Japa
 - Kubernetes client
 - k6 runner jobs
 
 ## Prerequisites
 
-- Node.js 22+
+- Node.js 24+ (`nvm install && nvm use` picks it up from `.nvmrc`)
 - npm 11+
-- Bun 1.2+
 - Docker
 - PostgreSQL 16, Docker Compose, or in-cluster PostgreSQL
 - kubectl
@@ -149,12 +148,17 @@ npm --workspace backend run migrate:latest
 
 ### Backend environment
 
-`backend/.env` drives the host-run worker and the integration suite. Copy
-`backend/.env.example` and fill in the secrets. Required values:
+`backend/.env` drives the host-run API/worker and the integration suite. Copy
+`backend/.env.example`, generate `APP_KEY` with `node ace generate:key` (from
+`backend/`), and fill in the secrets. Required values:
 
 ```bash
-JWT_SECRET=...
-JWT_REFRESH_SECRET=...
+PORT=3001
+HOST=0.0.0.0
+LOG_LEVEL=info
+APP_KEY=...
+APP_URL=http://localhost:3001
+SESSION_DRIVER=cookie
 RUNNER_SHARED_SECRET=...
 RUNNER_CALLBACK_BASE_URL=http://<kind-gateway>:3001
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/app
@@ -162,14 +166,13 @@ DATABASE_URL=postgres://postgres:postgres@localhost:5432/app
 
 Optional values:
 
-- `PORT` defaults to `3001`.
 - `KUBERNETES_CONTEXT` has no default and must be set (`kind-taas-dev` locally). The worker fails at startup rather than silently dispatching Jobs to kubectl's current context. `dev-up.sh` sets it for you.
 - `KUBERNETES_NAMESPACE` defaults to `app`.
-- `KUBERNETES_QUEUE_ENDPOINT` is optional.
 - `RUNNER_IMAGE` defaults to `breakit-k6-runner:local`.
 - `RUNNER_RUNTIME_CLASS` and `RUNNER_NODE_SELECTOR` are empty locally; managed clusters use them to pin runner pods (e.g. GKE Sandbox: `gvisor` with `sandbox.gke.io/runtime=gvisor`).
-- `JWT_ACCESS_TTL` defaults to `15m`, `JWT_REFRESH_TTL` to `7d`.
-- `CORS_ORIGIN` defaults to `*`, `COOKIE_SECURE` to `false`, `COOKIE_SAMESITE` to `Lax`, `COOKIE_DOMAIN` is unset.
+- `CORS_ORIGIN` defaults to `*` (reflects the request origin; local dev only) and takes a comma-separated allowlist in production.
+- `SESSION_SAMESITE` defaults to `lax` and `SESSION_SECURE` to on in production; cross-domain deployments use `SESSION_SAMESITE=none` (see ADR-008).
+- Tests read `backend/.env.test` on top of `.env`; it points at a separate `app_test` database that the functional suite creates and migrates.
 
 
 ## Run The Frontend
@@ -201,7 +204,7 @@ It builds from the repo root, because `frontend/Dockerfile` copies `tsconfig.bas
 
 | Script | Purpose | When to run | Important prerequisites |
 | --- | --- | --- | --- |
-| `ops/dev-up.sh` | Starts the cluster, builds/loads the runner image, brings up the Compose stack, and runs the outbox worker in the foreground. | The normal way to start working (`make up`). | Docker, kind, kubectl, bun. Set `SKIP_WORKER=1` to skip the worker. |
+| `ops/dev-up.sh` | Starts the cluster, builds/loads the runner image, brings up the Compose stack, and runs the outbox worker in the foreground. | The normal way to start working (`make up`). | Docker, kind, kubectl, Node 24. Set `SKIP_WORKER=1` to skip the worker. |
 | `ops/dev-down.sh` | Stops the Compose stack. `--cluster` also deletes the cluster, `--volumes` also drops the database volume. | Teardown (`make down` / `make down-all`). | Docker. |
 | `ops/smoke-test.sh` | End-to-end check: submits a test run and asserts a result reaches PostgreSQL. | After `dev-up.sh`, for one pass/fail signal. | The full stack running, worker included. |
 | `ops/lib.sh` | Shared defaults and helpers, including the kind host-gateway lookup. | Sourced by the other ops scripts. | Set `WORKLOAD_CONTEXT`, `WORKLOAD_CLUSTER_NAME`, or `APP_NAMESPACE` to override defaults. |
@@ -222,7 +225,7 @@ Root ops scripts load `.env` through `ops/run-with-env.sh`. Backend integration 
 | `npm run dev` | Runs workspace dev scripts through Turbo. | Local development for both apps. | Start the worker separately for dispatch flows. |
 | `npm run api` | Runs the backend API in watch mode. | When you want the API from source instead of the Compose image. | Backend env vars and reachable database. |
 | `npm run worker` | Runs the backend worker in watch mode. | Worker development. | Backend env vars, reachable database, and kube access for runner jobs. |
-| `npm run dev:up` | Starts everything and runs the worker in the foreground. Same as `make up`. | The normal way to start working. | Docker, kind, kubectl, bun. |
+| `npm run dev:up` | Starts everything and runs the worker in the foreground. Same as `make up`. | The normal way to start working. | Docker, kind, kubectl, Node 24. |
 | `npm run dev:down` | Stops the Compose stack. Same as `make down`. | Teardown. | Docker. |
 | `npm run smoke` | End-to-end smoke test. | After `dev:up`, for one pass/fail signal. | Full stack running, worker included. |
 | `npm run test:integration` | Runs the end-to-end integration suite. | Same prerequisites as the smoke test. | Full stack running, worker included. |
@@ -237,15 +240,16 @@ Backend `backend/package.json`:
 
 | Script | Purpose | When to run | Important prerequisites |
 | --- | --- | --- | --- |
-| `npm --workspace backend run dev` | Starts the API with Bun watch. | Local API development. | Required backend env vars. |
-| `npm --workspace backend run worker:dev` | Starts the worker with Bun watch. | Worker development; this is what `dev-up.sh` runs. | Required backend env vars and kube access for runner jobs. |
-| `npm --workspace backend run test` | Runs the backend unit tests under `src/tests`. Pins the integration gate off, so it never needs a cluster. | Backend validation. | None. |
+| `npm --workspace backend run dev` | Starts the API with `node ace serve --hmr`. | Local API development. | Required backend env vars. |
+| `npm --workspace backend run worker:dev` | Starts the outbox worker (`node ace outbox:work`). | Worker development; this is what `dev-up.sh` runs. | Required backend env vars and kube access for runner jobs. |
+| `npm --workspace backend run test` | Runs the `unit` and `functional` Japa suites. Never needs a cluster. | Backend validation. | Compose PostgreSQL up (functional tests use the `app_test` database). |
+| `npm --workspace backend run test:unit` | Runs only the `unit` suite (domain and runner adapter). | Fast feedback. | None. |
 | `npm --workspace backend run test:integration` | Runs the end-to-end integration suite against the running stack. | Full validation. | Compose stack up, worker running, cluster reachable. |
-| `npm --workspace backend run build` | Compiles TypeScript to `dist`. | Release or CI validation. | Dependencies installed. |
-| `npm --workspace backend run start` | Runs built API from `dist`. | Production-style local API run. | Run `build` first. |
-| `npm --workspace backend run worker:start` | Runs built worker from `dist`. | Production-style local worker run. | Run `build` first. |
-| `npm --workspace backend run migrate:latest` | Applies latest Knex migrations. | Before using a fresh or changed database. | Correct `DATABASE_URL`. |
-| `npm --workspace backend run migrate:rollback` | Rolls back the latest Knex migration batch. | Local schema rollback. | Correct `DATABASE_URL`; use carefully. |
+| `npm --workspace backend run build` | Compiles to `build/` with `node ace build`. | Release or CI validation. | Dependencies installed. |
+| `npm --workspace backend run start` | Runs the built API from `build/`. | Production-style local API run. | Run `build` first. |
+| `npm --workspace backend run worker:start` | Runs the built worker from `build/`. | Production-style local worker run. | Run `build` first. |
+| `npm --workspace backend run migrate:latest` | Applies pending Lucid migrations (`node ace migration:run`). A database first migrated by the old Knex runner needs `node ace db:adopt-knex` once; Compose's `migrate` service does this automatically. | Before using a fresh or changed database. | Correct `DATABASE_URL`. |
+| `npm --workspace backend run migrate:rollback` | Rolls back the latest migration batch. | Local schema rollback. | Correct `DATABASE_URL`; use carefully. |
 | `npm --workspace backend run lint` | Runs Biome checks for backend. | Backend quality gate. | Dependencies installed. |
 | `npm --workspace backend run format` | Formats backend files. | Formatting fixes. | Writes files. |
 | `npm --workspace backend run typecheck` | Typechecks backend without emitting files. | Backend quality gate. | Dependencies installed. |

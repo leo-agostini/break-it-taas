@@ -1,7 +1,7 @@
 # ADR-004: Autenticação com cookies httpOnly entre domínios públicos independentes
 
 ## Status
-Accepted
+Superseded by [ADR-008](ADR-008-session-auth.md) — o mecanismo (JWT + refresh) foi substituído pela sessão do AdonisJS; a postura de cookie cross-site e as limitações de navegador registradas aqui continuam valendo.
 
 ## Contexto
 
