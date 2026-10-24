@@ -1,7 +1,6 @@
 import {
   createServerCheckHttpClient,
   createServerPrivateHttpClient,
-  createServerPublicHttpClient,
 } from '@/lib/httpClient';
 import { isAxiosError } from 'axios';
 import { redirect } from 'react-router';
@@ -33,19 +32,11 @@ export async function requireServerAuth(
     const response = await privateClient.get<AuthCheckResponse>('/auth/check');
     return response.data.user;
   } catch (error) {
-    if (!isUnauthorized(error)) {
-      throw error;
+    // No session (or it expired): there is nothing to refresh, log in again.
+    if (isUnauthorized(error)) {
+      throw redirect('/login');
     }
-  }
-
-  try {
-    const publicClient = createServerPublicHttpClient(request);
-    await publicClient.post('/auth/refresh');
-
-    const response = await privateClient.get<AuthCheckResponse>('/auth/check');
-    return response.data.user;
-  } catch {
-    throw redirect('/login');
+    throw error;
   }
 }
 
