@@ -4,6 +4,7 @@ import testUtils from '@adonisjs/core/services/test_utils';
 import { sessionApiClient } from '@adonisjs/session/plugins/api_client';
 import { apiClient } from '@japa/api-client';
 import { assert } from '@japa/assert';
+import { expect } from '@japa/expect';
 import { pluginAdonisJS } from '@japa/plugin-adonisjs';
 import type { Config } from '@japa/runner/types';
 import { ensureTestDatabase } from '#tests/helpers/database';
@@ -14,6 +15,7 @@ import { ensureTestDatabase } from '#tests/helpers/database';
 
 export const plugins: Config['plugins'] = [
   assert(),
+  expect(),
   pluginAdonisJS(app),
   apiClient(),
   sessionApiClient(app),
