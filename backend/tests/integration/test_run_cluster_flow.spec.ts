@@ -158,6 +158,10 @@ async function signup(email: string) {
 
 /**
  * Logs in and returns the `Cookie` header that carries the session (ADR-008).
+ *
+ * With the cookie session store, login sets two cookies: `breakit-session`
+ * holds the session id and a second, encrypted cookie named after that id
+ * holds the session data. Both have to be sent back.
  */
 async function signin(email: string) {
   const response = await fetch(`${baseUrl}/api/login`, {
@@ -169,14 +173,12 @@ async function signin(email: string) {
     throw new Error(`Login failed with ${response.status}`);
   }
 
-  const sessionCookie = response.headers
-    .getSetCookie()
-    .find((cookie) => cookie.startsWith('breakit-session='));
-  if (!sessionCookie) {
+  const cookies = response.headers.getSetCookie();
+  if (!cookies.some((cookie) => cookie.startsWith('breakit-session='))) {
     throw new Error('Login did not set the session cookie');
   }
 
-  return sessionCookie.split(';')[0];
+  return cookies.map((cookie) => cookie.split(';')[0]).join('; ');
 }
 
 async function createTestCase(sessionCookie: string, ownerId: string) {
