@@ -10,3 +10,4 @@
 
 import '#modules/shared/routes';
 import '#modules/identity/routes';
+import '#modules/load_testing/routes';

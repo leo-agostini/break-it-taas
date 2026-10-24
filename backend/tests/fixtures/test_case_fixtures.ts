@@ -2,14 +2,14 @@ import { randomUUID } from 'node:crypto';
 import {
   TestCaseOwnerType,
   TestType,
-} from '#modules/test_cases/domain/test_type';
-import { AuthStrategyKind } from '#modules/test_cases/domain/vos/auth_strategy';
-import { ResourceProfile } from '#modules/test_cases/domain/vos/execution_policy';
+} from '#modules/load_testing/domain/test_type';
+import { AuthStrategyKind } from '#modules/load_testing/domain/vos/auth_strategy';
+import { ResourceProfile } from '#modules/load_testing/domain/vos/execution_policy';
 import {
   LoadMode,
   TimeUnit,
-} from '#modules/test_cases/domain/vos/load_profile';
-import { CheckKind, HttpMethod } from '#modules/test_cases/domain/vos/step';
+} from '#modules/load_testing/domain/vos/load_profile';
+import { CheckKind, HttpMethod } from '#modules/load_testing/domain/vos/step';
 
 /**
  * A request body for `POST /api/test-cases` that passes every validation and

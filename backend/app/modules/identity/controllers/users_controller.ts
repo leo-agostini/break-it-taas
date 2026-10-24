@@ -1,7 +1,7 @@
 import { inject } from '@adonisjs/core';
 import type { HttpContext } from '@adonisjs/core/http';
 import { presentCreatedUser } from '#modules/identity/presenters/user_presenter';
-import type { UserService } from '#modules/identity/services/user_service';
+import { UserService } from '#modules/identity/services/user_service';
 import { signupValidator } from '#modules/identity/validators/user_validators';
 
 @inject()

@@ -1,7 +1,12 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
   "files": {
-    "ignore": ["**/build/**", "**/dist/**", "**/.react-router/**"]
+    "ignore": [
+      "**/build/**",
+      "**/dist/**",
+      "**/.react-router/**",
+      "**/.adonisjs/**"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -24,5 +29,25 @@
       "quoteStyle": "single",
       "semicolons": "always"
     }
-  }
+  },
+  "overrides": [
+    {
+      "include": [
+        "backend/**",
+        "app/**",
+        "config/**",
+        "providers/**",
+        "commands/**",
+        "start/**",
+        "tests/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "useImportType": "off"
+          }
+        }
+      }
+    }
+  ]
 }

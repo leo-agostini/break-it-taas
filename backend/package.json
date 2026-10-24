@@ -27,7 +27,8 @@
     "#database/*": "./database/*.js",
     "#tests/*": "./tests/*.js",
     "#start/*": "./start/*.js",
-    "#config/*": "./config/*.js"
+    "#config/*": "./config/*.js",
+    "#providers/*": "./providers/*.js"
   },
   "dependencies": {
     "@adonisjs/auth": "^10.1.0",
