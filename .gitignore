@@ -69,6 +69,8 @@ web_modules/
 .env
 .env.*
 !.env.example
+# Non-secret overrides for `node ace test` (points at the app_test database).
+!backend/.env.test
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

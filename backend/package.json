@@ -2,34 +2,68 @@
   "name": "backend",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "worker:dev": "bun --watch src/worker.ts",
-    "test": "RUN_CLUSTER_INTEGRATION=0 bun test ./src/tests",
-    "test:integration": "RUN_CLUSTER_INTEGRATION=1 bun --env-file=.env test ./src/tests/integration",
-    "build": "tsc -p tsconfig.json --noEmit false --outDir dist",
-    "start": "bun run dist/src/index.js",
-    "worker:start": "bun run dist/src/worker.js",
-    "migrate:latest": "bun run src/infra/db/migrate.ts up",
-    "migrate:rollback": "bun run src/infra/db/migrate.ts down",
+    "dev": "node ace serve --hmr",
+    "worker:dev": "node ace outbox:work",
+    "test": "node ace test unit functional",
+    "test:unit": "node ace test unit",
+    "test:integration": "RUN_CLUSTER_INTEGRATION=1 node ace test integration",
+    "build": "node ace build",
+    "start": "node bin/server.js",
+    "worker:start": "node ace.js outbox:work",
+    "migrate:latest": "node ace migration:run",
+    "migrate:rollback": "node ace migration:rollback",
     "lint": "biome check .",
     "format": "biome format . --write",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc --noEmit"
+  },
+  "imports": {
+    "#modules/*": "./app/modules/*.js",
+    "#exceptions/*": "./app/exceptions/*.js",
+    "#middleware/*": "./app/middleware/*.js",
+    "#database/*": "./database/*.js",
+    "#tests/*": "./tests/*.js",
+    "#start/*": "./start/*.js",
+    "#config/*": "./config/*.js"
   },
   "dependencies": {
-    "@elysiajs/swagger": "^1.3.1",
+    "@adonisjs/auth": "^10.1.0",
+    "@adonisjs/core": "^7.6.0",
+    "@adonisjs/cors": "^3.0.0",
+    "@adonisjs/lucid": "^22.4.2",
+    "@adonisjs/session": "^8.3.0",
     "@kubernetes/client-node": "^1.4.0",
+    "@vinejs/vine": "^4.4.0",
     "argon2": "^0.44.0",
-    "dotenv": "^16.5.0",
-    "elysia": "^1.1.21",
-    "jsonwebtoken": "^9.0.2",
-    "knex": "3.1.0",
+    "luxon": "^3.7.2",
     "pg": "^8.14.1",
-    "zod": "^4.4.3"
+    "reflect-metadata": "^0.2.2",
+    "undici": "^8.12.0",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "@types/jsonwebtoken": "^9.0.9",
-    "bun-types": "^1.2.13",
-    "typescript": "^5.8.3"
+    "@adonisjs/assembler": "^8.6.0",
+    "@adonisjs/tsconfig": "^2.0.0",
+    "@japa/api-client": "^3.2.1",
+    "@japa/assert": "^4.2.0",
+    "@japa/plugin-adonisjs": "^5.2.0",
+    "@japa/runner": "^5.4.0",
+    "@poppinss/ts-exec": "^1.4.4",
+    "@types/luxon": "^3.7.5",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "hot-hook": "^1.0.0",
+    "pino-pretty": "^13.1.3",
+    "typescript": "~6.0.3",
+    "youch": "^4.1.1"
+  },
+  "hotHook": {
+    "boundaries": [
+      "./app/modules/*/controllers/**/*.ts",
+      "./app/middleware/*.ts"
+    ]
   }
 }
