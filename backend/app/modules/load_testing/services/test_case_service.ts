@@ -17,8 +17,9 @@ export class TestCaseService {
   constructor(private readonly runs: TestRunService) {}
 
   /**
-   * Creating a test case also queues its first run, atomically: either both
-   * exist (plus the outbox event that dispatches the run) or neither does.
+   * Creating a test case also queues its first run, at the case's default
+   * configuration, atomically: either both exist (plus the outbox event that
+   * dispatches the run) or neither does.
    */
   async create(
     draft: TestCaseDraft,
@@ -32,7 +33,7 @@ export class TestCaseService {
       testCase.useTransaction(trx);
       await testCase.save();
 
-      const run = await this.runs.request(testCase.id, trx);
+      const run = await this.runs.request(testCase.id, definition, trx);
       return { testCase, run };
     });
   }

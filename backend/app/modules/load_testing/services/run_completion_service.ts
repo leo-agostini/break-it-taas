@@ -12,7 +12,6 @@ import {
   isTerminalStatus,
 } from '../domain/test_run_status.js';
 import Result from '../models/result.js';
-import TestCase from '../models/test_case.js';
 import TestRun from '../models/test_run.js';
 import TestRunMetric from '../models/test_run_metric.js';
 
@@ -83,46 +82,46 @@ export class RunCompletionService {
         { client: trx },
       );
 
-      const testCase = await TestCase.find(run.testCaseId, { client: trx });
-      if (testCase) {
-        const projection = normalizeK6ResultMetrics({
-          testRunId: run.id,
-          status: callback.status,
-          runtimeRef: callback.runtimeRef,
-          completedAt: callback.completedAt,
-          artifacts,
-          resultSummary: callback.resultSummary,
-          loadProfile: testCase.toDefinition().loadProfile,
-        });
+      // Measured against the load this run asked for, which may differ from
+      // its test case's default.
+      const projection = normalizeK6ResultMetrics({
+        testRunId: run.id,
+        status: callback.status,
+        runtimeRef: callback.runtimeRef,
+        completedAt: callback.completedAt,
+        artifacts,
+        resultSummary: callback.resultSummary,
+        loadProfile: run.toRunConfiguration().loadProfile,
+      });
 
-        await TestRunMetric.updateOrCreate(
-          { testRunId: run.id },
-          {
-            status: projection.status,
-            runtimeRef: projection.runtimeRef ?? null,
-            completedAt: projection.completedAt
-              ? DateTime.fromISO(projection.completedAt)
-              : null,
-            requestedRate: projection.requestedRate,
-            requestedTimeUnit: projection.requestedTimeUnit ?? null,
-            requestedDurationSeconds:
-              projection.requestedDurationSeconds ?? null,
-            achievedRps: projection.achievedRps,
-            totalRequests: projection.totalRequests ?? null,
-            droppedIterations: projection.droppedIterations ?? null,
-            failureRate: projection.failureRate,
-            successRate: projection.successRate,
-            p95Ms: projection.p95Ms,
-            p99Ms: projection.p99Ms,
-            medianMs: projection.medianMs,
-            generatorLimited: projection.generatorLimited,
-            timeoutsDetected: projection.timeoutsDetected,
-            aborted: projection.aborted,
-            breakingPointRate: projection.breakingPointRate,
-          },
-          { client: trx },
-        );
-      }
+      await TestRunMetric.updateOrCreate(
+        { testRunId: run.id },
+        {
+          status: projection.status,
+          runtimeRef: projection.runtimeRef ?? null,
+          completedAt: projection.completedAt
+            ? DateTime.fromISO(projection.completedAt)
+            : null,
+          requestedRate: projection.requestedRate,
+          requestedTimeUnit: projection.requestedTimeUnit ?? null,
+          requestedDurationSeconds: projection.requestedDurationSeconds ?? null,
+          requestedVus: projection.requestedVus ?? null,
+          achievedRps: projection.achievedRps,
+          peakVus: projection.peakVus ?? null,
+          totalRequests: projection.totalRequests ?? null,
+          droppedIterations: projection.droppedIterations ?? null,
+          failureRate: projection.failureRate,
+          successRate: projection.successRate,
+          p95Ms: projection.p95Ms,
+          p99Ms: projection.p99Ms,
+          medianMs: projection.medianMs,
+          generatorLimited: projection.generatorLimited,
+          timeoutsDetected: projection.timeoutsDetected,
+          aborted: projection.aborted,
+          breakingPointRate: projection.breakingPointRate,
+        },
+        { client: trx },
+      );
 
       return { updated: true };
     });

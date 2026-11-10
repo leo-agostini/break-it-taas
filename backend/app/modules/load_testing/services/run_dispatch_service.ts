@@ -10,7 +10,8 @@ import TestRun from '../models/test_run.js';
 
 /**
  * Handles `test-run.requested` outbox events: hands the run to the runner
- * queue and marks it RUNNING. Throwing here makes the outbox retry the event
+ * queue — what to test from the test case, how hard from the run — and marks
+ * it RUNNING. Throwing here makes the outbox retry the event
  * with backoff.
  */
 @inject()
@@ -34,7 +35,12 @@ export default class RunDispatchService {
       throw new NotFoundError(`Test case ${run.testCaseId} not found`);
     }
 
-    const definition = JSON.parse(JSON.stringify(testCase.toDefinition()));
+    const definition = JSON.parse(
+      JSON.stringify({
+        ...testCase.toDefinition(),
+        ...run.toRunConfiguration(),
+      }),
+    );
     const { runtimeRef } = await this.queue.publish({
       testRunId: run.id,
       testCase: { id: testCase.id, ...definition },

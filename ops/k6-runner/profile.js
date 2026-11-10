@@ -57,9 +57,74 @@ export const estimateVuEnvelope = (ratePerTimeUnit, timeUnit, config = {}) => {
   return { preAllocatedVUs, maxVUs };
 };
 
+const resolveVuCap = (options = {}) => {
+  const configured = Number(options.maxVUsCap || DEFAULT_MAX_VUS_CAP);
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_MAX_VUS_CAP;
+};
+
+const clampVus = (value, cap, min = 1) =>
+  Math.min(cap, Math.max(min, Math.round(Number(value || 0))));
+
+/**
+ * The VU pool for an arrival-rate executor: the one the run asked for when it
+ * set `vus`, otherwise the estimate. Either way it stays under the runner's
+ * cap, which protects the pod from a pool its memory limit cannot hold.
+ */
+const resolveVuPool = (ratePerTimeUnit, timeUnit, config, options) => {
+  const cap = resolveVuCap({ ...options, ...config });
+  const pool = config.vus;
+
+  if (pool && typeof pool === 'object') {
+    const preAllocatedVUs = clampVus(pool.preAllocated, cap);
+    return {
+      preAllocatedVUs,
+      maxVUs: Math.max(preAllocatedVUs, clampVus(pool.max, cap)),
+    };
+  }
+
+  const estimate = estimateVuEnvelope(ratePerTimeUnit, timeUnit, {
+    ...options,
+    ...config,
+  });
+  return {
+    preAllocatedVUs: Math.min(cap, estimate.preAllocatedVUs),
+    maxVUs: estimate.maxVUs,
+  };
+};
+
 export const buildScenario = (loadProfile, options = {}) => {
   const profile = loadProfile || { mode: 'CONSTANT', config: {} };
   const config = profile.config || {};
+
+  // Closed model: a fixed number of VUs, each looping through the steps as fast
+  // as the target answers. The resulting rate is an outcome, not an input.
+  if (profile.mode === 'CONSTANT_VUS') {
+    return {
+      executor: 'constant-vus',
+      vus: clampVus(config.vus, resolveVuCap(options)),
+      duration: toK6Duration(config.duration, config.timeUnit),
+    };
+  }
+
+  if (profile.mode === 'RAMPING_VUS') {
+    const cap = resolveVuCap(options);
+    const stages = Array.isArray(config.stages) ? config.stages : [];
+    const startVUs = clampVus(config.startVus, cap, 0);
+    return {
+      executor: 'ramping-vus',
+      startVUs,
+      stages:
+        stages.length > 0
+          ? stages.map((stage) => ({
+              // As with rate ramps, a target of 0 is how a ramp-down ends.
+              target: clampVus(stage.target, cap, 0),
+              duration: toK6Duration(stage.duration, config.timeUnit),
+            }))
+          : [{ target: startVUs, duration: '10s' }],
+    };
+  }
 
   if (profile.mode === 'RAMP') {
     const stages = Array.isArray(config.stages) ? config.stages : [];
@@ -75,10 +140,7 @@ export const buildScenario = (loadProfile, options = {}) => {
       (acc, item) => Math.max(acc, item.target),
       initialRate,
     );
-    const vus = estimateVuEnvelope(maxTarget, timeUnit, {
-      ...options,
-      ...config,
-    });
+    const vus = resolveVuPool(maxTarget, timeUnit, config, options);
 
     return {
       executor: 'ramping-arrival-rate',
@@ -96,10 +158,7 @@ export const buildScenario = (loadProfile, options = {}) => {
   const targetRate = Math.max(1, Number(config.targetRate || 1));
   const duration = toK6Duration(config.duration, config.timeUnit);
   const timeUnit = toK6TimeUnit(config.timeUnit);
-  const vus = estimateVuEnvelope(targetRate, timeUnit, {
-    ...options,
-    ...config,
-  });
+  const vus = resolveVuPool(targetRate, timeUnit, config, options);
 
   return {
     executor: 'constant-arrival-rate',
@@ -162,7 +221,8 @@ export const needsResponseBodies = (steps) => {
 };
 
 /**
- * The arrival rate the profile had reached at a given point in the run.
+ * The arrival rate the profile had reached at a given point in the run, or
+ * null for a VU profile.
  *
  * When an abortOnFail threshold stops a BREAKPOINT test, this is the number
  * that matters: the load the target system could no longer sustain. Stages ramp
@@ -172,6 +232,11 @@ export const needsResponseBodies = (steps) => {
 export const resolveBreakingPoint = (loadProfile, elapsedSeconds) => {
   const profile = loadProfile || { mode: 'CONSTANT', config: {} };
   const config = profile.config || {};
+
+  // A VU run does not control its rate, so it has no rate to break at.
+  if (profile.mode === 'CONSTANT_VUS' || profile.mode === 'RAMPING_VUS') {
+    return null;
+  }
 
   if (profile.mode !== 'RAMP') {
     return Math.max(0, Number(config.targetRate || 0));

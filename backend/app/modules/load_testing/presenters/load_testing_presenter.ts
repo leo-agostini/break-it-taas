@@ -45,6 +45,9 @@ export function presentTestRun(run: TestRun) {
     startedAt: toIso(run.startedAt) ?? null,
     completedAt: toIso(run.completedAt) ?? null,
     runtimeRef: run.runtimeRef ?? null,
+    // What this run was asked to do; may differ from the test case default.
+    loadProfile: run.loadProfile,
+    executionPolicy: run.executionPolicy,
   };
 }
 
@@ -53,7 +56,9 @@ function presentMetricsSummary(metrics: TestRunMetric) {
     requestedRate: metrics.requestedRate,
     requestedTimeUnit: metrics.requestedTimeUnit ?? undefined,
     requestedDurationSeconds: metrics.requestedDurationSeconds,
+    requestedVus: metrics.requestedVus ?? undefined,
     achievedRps: metrics.achievedRps,
+    peakVus: metrics.peakVus ?? undefined,
     totalRequests: metrics.totalRequests,
     droppedIterations: metrics.droppedIterations,
     failureRate: metrics.failureRate,
@@ -92,9 +97,11 @@ export function presentReport({
       rate: metrics.requestedRate,
       timeUnit: metrics.requestedTimeUnit ?? undefined,
       durationSeconds: metrics.requestedDurationSeconds,
+      vus: metrics.requestedVus ?? undefined,
     },
     achieved: {
       rps: metrics.achievedRps,
+      peakVus: metrics.peakVus ?? undefined,
       totalRequests: metrics.totalRequests,
       droppedIterations: metrics.droppedIterations,
       failureRate: metrics.failureRate,

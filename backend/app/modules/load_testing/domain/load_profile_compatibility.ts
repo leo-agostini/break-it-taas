@@ -6,12 +6,26 @@ import { TestType } from './test_type.js';
 import { LoadMode } from './vos/load_profile.js';
 import type { ThresholdPolicy } from './vos/threshold_policy.js';
 
+// Each type allows the rate mode and the VU mode of the same shape, except
+// BREAKPOINT: its result is the arrival rate the target gave out at, which a
+// closed-model (VU) run cannot measure — the rate there is whatever the target
+// lets through.
 const compatibility: Record<TestType, LoadMode[]> = {
-  [TestType.SMOKE]: [LoadMode.CONSTANT],
-  [TestType.AVG_LOAD]: [LoadMode.CONSTANT, LoadMode.RAMP],
-  [TestType.STRESS]: [LoadMode.CONSTANT, LoadMode.RAMP],
-  [TestType.SOAK]: [LoadMode.CONSTANT],
-  [TestType.SPIKE]: [LoadMode.RAMP],
+  [TestType.SMOKE]: [LoadMode.CONSTANT, LoadMode.CONSTANT_VUS],
+  [TestType.AVG_LOAD]: [
+    LoadMode.CONSTANT,
+    LoadMode.RAMP,
+    LoadMode.CONSTANT_VUS,
+    LoadMode.RAMPING_VUS,
+  ],
+  [TestType.STRESS]: [
+    LoadMode.CONSTANT,
+    LoadMode.RAMP,
+    LoadMode.CONSTANT_VUS,
+    LoadMode.RAMPING_VUS,
+  ],
+  [TestType.SOAK]: [LoadMode.CONSTANT, LoadMode.CONSTANT_VUS],
+  [TestType.SPIKE]: [LoadMode.RAMP, LoadMode.RAMPING_VUS],
   [TestType.BREAKPOINT]: [LoadMode.RAMP],
 };
 

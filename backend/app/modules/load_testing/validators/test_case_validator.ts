@@ -1,10 +1,13 @@
 import vine from '@vinejs/vine';
-import type { FieldContext } from '@vinejs/vine/types';
 import { TestCaseOwnerType, TestType } from '../domain/test_type.js';
 import { AuthStrategyKind } from '../domain/vos/auth_strategy.js';
-import { ResourceProfile } from '../domain/vos/execution_policy.js';
-import { LoadMode, TimeUnit } from '../domain/vos/load_profile.js';
 import { CheckKind, HttpMethod } from '../domain/vos/step.js';
+import { discriminator, integer, ratio, unknownVariant } from './helpers.js';
+import {
+  executionPolicySchema,
+  loadPresetSchema,
+  loadProfileSchema,
+} from './run_configuration_schemas.js';
 
 /*
 | Structural validation of a test case payload: types, ranges, and which
@@ -12,55 +15,6 @@ import { CheckKind, HttpMethod } from '../domain/vos/step.js';
 | explicit profile, test type ↔ load mode, BREAKPOINT thresholds, timeout vs.
 | profile length) belong to the domain: see buildTestCaseDefinition.
 */
-
-const integer = () => vine.number({ strict: true }).withoutDecimals();
-const ratio = () => vine.number({ strict: true }).min(0).max(1);
-
-const discriminator =
-  (key: string, expected: string) =>
-  (value: unknown): boolean =>
-    vine.helpers.isObject(value) &&
-    (value as Record<string, unknown>)[key] === expected;
-
-const unknownVariant =
-  (key: string) => (_value: unknown, field: FieldContext) =>
-    field.report(
-      `The ${field.getFieldPath() || 'value'}.${key} is not a supported value`,
-      'union',
-      field,
-    );
-
-const stage = vine.object({
-  target: integer().min(0),
-  duration: integer().min(1),
-});
-
-const loadProfile = vine
-  .union([
-    vine.union.if(
-      discriminator('mode', LoadMode.CONSTANT),
-      vine.object({
-        mode: vine.literal(LoadMode.CONSTANT),
-        config: vine.object({
-          duration: integer().min(1),
-          targetRate: integer().min(0),
-          timeUnit: vine.enum(Object.values(TimeUnit)),
-        }),
-      }),
-    ),
-    vine.union.if(
-      discriminator('mode', LoadMode.RAMP),
-      vine.object({
-        mode: vine.literal(LoadMode.RAMP),
-        config: vine.object({
-          initialRate: integer().min(0),
-          timeUnit: vine.enum(Object.values(TimeUnit)),
-          stages: vine.array(stage).minLength(1),
-        }),
-      }),
-    ),
-  ])
-  .otherwise(unknownVariant('mode'));
 
 const stepCheck = vine
   .union([
@@ -194,15 +148,10 @@ export const createTestCaseValidator = vine.create({
     environment: vine.string().minLength(1),
   }),
   authStrategy,
-  // Either author the profile by hand, or let the test type derive it.
-  loadProfile: loadProfile.optional(),
-  loadPreset: vine
-    .object({
-      peakRate: integer().min(1),
-      duration: integer().min(1),
-      timeUnit: vine.enum(Object.values(TimeUnit)),
-    })
-    .optional(),
+  // The default load of the case's runs: either authored by hand, or derived
+  // from the test type.
+  loadProfile: loadProfileSchema.optional(),
+  loadPreset: loadPresetSchema.optional(),
   thresholdPolicy: vine.object({
     maxErrorRate: ratio().optional(),
     maxP95ResponseTimeMs: integer().min(1).optional(),
@@ -210,11 +159,6 @@ export const createTestCaseValidator = vine.create({
     minCheckSuccessRate: ratio().optional(),
     abortOnFail: vine.boolean({ strict: true }).optional(),
   }),
-  executionPolicy: vine.object({
-    resourceProfile: vine.enum(Object.values(ResourceProfile)),
-    timeoutSeconds: integer().min(1),
-    cpuMillicores: integer().min(1).optional(),
-    memoryMb: integer().min(1).optional(),
-  }),
+  executionPolicy: executionPolicySchema,
   steps: vine.array(step).optional(),
 });

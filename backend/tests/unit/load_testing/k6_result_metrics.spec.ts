@@ -149,4 +149,57 @@ test.group('normalizeK6ResultMetrics', () => {
     // 40 minutes of stages, not 40 seconds.
     expect(projection.requestedDurationSeconds).toBe(2_400);
   });
+
+  test('reports the peak stage target as the requested rate of a RAMP profile', ({
+    expect,
+  }) => {
+    const loadProfile = LoadProfile.create(LoadMode.RAMP, {
+      initialRate: 0,
+      timeUnit: TimeUnit.SECONDS,
+      stages: [
+        new Stage({ target: 3750, duration: 30 }),
+        new Stage({ target: 0, duration: 10 }),
+      ],
+    });
+
+    const projection = normalizeK6ResultMetrics({
+      testRunId: crypto.randomUUID(),
+      status: TestRunStatus.SUCCEEDED,
+      artifacts: [],
+      loadProfile,
+      resultSummary: { summary: { metrics: {} } },
+    });
+
+    expect(projection.requestedRate).toBe(3750);
+    expect(projection.requestedVus).toBeUndefined();
+  });
+
+  test('reports requested and peak VUs for a VU profile', ({ expect }) => {
+    const loadProfile = LoadProfile.create(LoadMode.RAMPING_VUS, {
+      startVus: 0,
+      timeUnit: TimeUnit.SECONDS,
+      stages: [
+        new Stage({ target: 200, duration: 30 }),
+        new Stage({ target: 0, duration: 10 }),
+      ],
+    });
+
+    const projection = normalizeK6ResultMetrics({
+      testRunId: crypto.randomUUID(),
+      status: TestRunStatus.SUCCEEDED,
+      artifacts: [],
+      loadProfile,
+      resultSummary: {
+        summary: {
+          metrics: { vus: { value: 200 }, vus_max: { value: 200 } },
+        },
+      },
+    });
+
+    expect(projection.requestedRate).toBeUndefined();
+    expect(projection.requestedVus).toBe(200);
+    expect(projection.peakVus).toBe(200);
+    // A VU run always uses its whole pool; that is the plan, not a limit.
+    expect(projection.generatorLimited).toBe(false);
+  });
 });

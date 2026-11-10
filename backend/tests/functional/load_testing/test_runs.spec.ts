@@ -1,3 +1,4 @@
+import app from '@adonisjs/core/services/app';
 import testUtils from '@adonisjs/core/services/test_utils';
 import type { ApiClient } from '@japa/api-client';
 import { test } from '@japa/runner';
@@ -5,7 +6,9 @@ import type User from '#modules/identity/models/user';
 import Result from '#modules/load_testing/models/result';
 import TestRun from '#modules/load_testing/models/test_run';
 import TestRunMetric from '#modules/load_testing/models/test_run_metric';
+import RunDispatchService from '#modules/load_testing/services/run_dispatch_service';
 import OutboxEvent from '#modules/outbox/models/outbox_event';
+import { type RunnerJob, TestRunQueue } from '#modules/runner/test_run_queue';
 import { makeValidNewTestCaseInput } from '#tests/fixtures/test_case_fixtures';
 import { createUser, signRunnerCallback } from '#tests/helpers/factories';
 
@@ -121,6 +124,230 @@ test.group('load_testing / test runs', (group) => {
       .get(`/api/test-runs/${testRunId}`)
       .loginAs(stranger);
     foreign.assertStatus(404);
+  });
+});
+
+class FakeQueue extends TestRunQueue {
+  published: RunnerJob[] = [];
+
+  async publish(job: RunnerJob) {
+    this.published.push(job);
+    return { runtimeRef: `job-${job.testRunId.slice(0, 8)}` };
+  }
+}
+
+test.group('load_testing / per-run configuration', (group) => {
+  group.each.setup(() => testUtils.db().truncate());
+  group.each.teardown(() => app.container.restore(TestRunQueue));
+
+  test('a run without a body runs at the test case default', async ({
+    client,
+    assert,
+  }) => {
+    const user = await createUser();
+    const { testCaseId, testRunId: firstRunId } = await createTestCase(
+      client,
+      user,
+    );
+
+    const response = await client
+      .post(`/api/test-runs/${testCaseId}`)
+      .loginAs(user);
+
+    response.assertStatus(201);
+    response.assertBodyContains({
+      loadProfile: {
+        mode: 'CONSTANT',
+        config: { targetRate: 5000, duration: 10, timeUnit: 'SECONDS' },
+      },
+      executionPolicy: { resourceProfile: 'SMALL', timeoutSeconds: 120 },
+    });
+    const first = await TestRun.findOrFail(firstRunId);
+    assert.deepEqual(first.loadProfile, response.body().loadProfile);
+  });
+
+  test('runs the same case at a different rate and container', async ({
+    client,
+    assert,
+  }) => {
+    const user = await createUser();
+    const { testCaseId } = await createTestCase(client, user);
+
+    const response = await client
+      .post(`/api/test-runs/${testCaseId}`)
+      .json({
+        loadProfile: {
+          mode: 'CONSTANT',
+          config: {
+            targetRate: 2500,
+            duration: 10,
+            timeUnit: 'SECONDS',
+            vus: { preAllocated: 300, max: 900 },
+          },
+        },
+        executionPolicy: {
+          resourceProfile: 'CUSTOM',
+          cpuMillicores: 2000,
+          memoryMb: 4096,
+        },
+      })
+      .loginAs(user);
+
+    response.assertStatus(201);
+    const run = await TestRun.findOrFail(response.body().id);
+    assert.deepEqual(run.loadProfile.config, {
+      targetRate: 2500,
+      duration: 10,
+      timeUnit: 'SECONDS',
+      vus: { preAllocated: 300, max: 900 },
+    });
+    assert.deepEqual(run.executionPolicy, {
+      resourceProfile: 'CUSTOM',
+      timeoutSeconds: 120,
+      cpuMillicores: 2000,
+      memoryMb: 4096,
+    });
+
+    // The default is untouched: the next plain run is back at 5000 req/s.
+    const plain = await client
+      .post(`/api/test-runs/${testCaseId}`)
+      .loginAs(user);
+    assert.equal(plain.body().loadProfile.config.targetRate, 5000);
+  });
+
+  test('runs a case with virtual users and stretches the timeout to fit', async ({
+    client,
+  }) => {
+    const user = await createUser();
+    const { testCaseId } = await createTestCase(client, user);
+
+    const response = await client
+      .post(`/api/test-runs/${testCaseId}`)
+      .json({ loadPreset: { peakVus: 50, duration: 5, timeUnit: 'MINUTES' } })
+      .loginAs(user);
+
+    response.assertStatus(201);
+    response.assertBodyContains({
+      loadProfile: {
+        mode: 'CONSTANT_VUS',
+        config: { vus: 50, duration: 5, timeUnit: 'MINUTES' },
+      },
+      executionPolicy: { resourceProfile: 'SMALL', timeoutSeconds: 330 },
+    });
+  });
+
+  test('rejects an override the test type does not allow', async ({
+    client,
+  }) => {
+    const user = await createUser();
+    const { testCaseId } = await createTestCase(client, user);
+
+    const response = await client
+      .post(`/api/test-runs/${testCaseId}`)
+      .json({
+        loadProfile: {
+          mode: 'RAMPING_VUS',
+          config: {
+            startVus: 0,
+            timeUnit: 'SECONDS',
+            stages: [{ target: 100, duration: 10 }],
+          },
+        },
+      })
+      .loginAs(user);
+
+    response.assertStatus(422);
+  });
+
+  test('rejects a CUSTOM container without a size', async ({ client }) => {
+    const user = await createUser();
+    const { testCaseId } = await createTestCase(client, user);
+
+    const response = await client
+      .post(`/api/test-runs/${testCaseId}`)
+      .json({ executionPolicy: { resourceProfile: 'CUSTOM' } })
+      .loginAs(user);
+
+    response.assertStatus(422);
+  });
+
+  test('dispatches the run with its own load and container', async ({
+    client,
+    assert,
+  }) => {
+    const user = await createUser();
+    const { testCaseId } = await createTestCase(client, user);
+    const created = await client
+      .post(`/api/test-runs/${testCaseId}`)
+      .json({
+        loadProfile: {
+          mode: 'CONSTANT',
+          config: { targetRate: 3750, duration: 10, timeUnit: 'SECONDS' },
+        },
+        executionPolicy: { resourceProfile: 'LARGE' },
+      })
+      .loginAs(user);
+
+    const queue = new FakeQueue();
+    app.container.swap(TestRunQueue, () => queue);
+    const dispatcher = await app.container.make(RunDispatchService);
+    await dispatcher.dispatch({ testRunId: created.body().id });
+
+    const [job] = queue.published;
+    assert.equal(job.testCase.id, testCaseId);
+    assert.deepEqual(job.testCase.loadProfile, {
+      mode: 'CONSTANT',
+      config: { targetRate: 3750, duration: 10, timeUnit: 'SECONDS' },
+    });
+    assert.equal(job.testCase.executionPolicy.resourceProfile, 'LARGE');
+  });
+
+  test('measures a run against its own load, not the default', async ({
+    client,
+    assert,
+  }) => {
+    const user = await createUser();
+    const { testCaseId } = await createTestCase(client, user);
+    const created = await client
+      .post(`/api/test-runs/${testCaseId}`)
+      .json({
+        loadProfile: {
+          mode: 'CONSTANT_VUS',
+          config: { vus: 40, duration: 20, timeUnit: 'SECONDS' },
+        },
+      })
+      .loginAs(user);
+    const testRunId = created.body().id;
+
+    await postCallback(
+      client,
+      callbackBody(testRunId, {
+        resultSummary: {
+          summary: {
+            metrics: {
+              http_reqs: { count: 9000, rate: 450 },
+              vus: { value: 40 },
+              vus_max: { value: 40 },
+            },
+          },
+        },
+      }),
+    );
+
+    const metrics = await TestRunMetric.findByOrFail('testRunId', testRunId);
+    assert.isUndefined(metrics.requestedRate);
+    assert.equal(metrics.requestedVus, 40);
+    assert.equal(metrics.peakVus, 40);
+    assert.equal(metrics.requestedDurationSeconds, 20);
+    assert.isFalse(metrics.generatorLimited);
+
+    const report = await client
+      .get(`/api/test-runs/${testRunId}/report`)
+      .loginAs(user);
+    report.assertBodyContains({
+      requested: { vus: 40, durationSeconds: 20 },
+      achieved: { rps: 450, peakVus: 40 },
+    });
   });
 });
 

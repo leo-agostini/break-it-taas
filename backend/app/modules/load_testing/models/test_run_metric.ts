@@ -33,8 +33,14 @@ export default class TestRunMetric extends BaseModel {
   @column()
   declare requestedDurationSeconds: number | null;
 
+  @column()
+  declare requestedVus: number | null;
+
   @column(decimal)
   declare achievedRps: number | undefined;
+
+  @column()
+  declare peakVus: number | null;
 
   @column()
   declare totalRequests: number | null;

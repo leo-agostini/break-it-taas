@@ -1,25 +1,15 @@
-import {
-  AuthorizationError,
-  ValidationError,
-} from '#modules/shared/domain/errors';
+import { AuthorizationError } from '#modules/shared/domain/errors';
 import type { ActorContext, UUID } from '#modules/shared/domain/types';
-import { assertTimeoutCoversProfile } from './execution_policy_compatibility.js';
+import { assertThresholdPolicyForType } from './load_profile_compatibility.js';
+import type { LoadPreset } from './load_profile_presets.js';
 import {
-  assertCompatibleLoadProfile,
-  assertThresholdPolicyForType,
-} from './load_profile_compatibility.js';
-import { type LoadPreset, deriveLoadProfile } from './load_profile_presets.js';
+  type ExecutionPolicyDraft,
+  buildRunConfiguration,
+} from './run_configuration.js';
 import { TestCaseOwnerType, type TestType } from './test_type.js';
 import type { AuthStrategy } from './vos/auth_strategy.js';
-import {
-  ExecutionPolicy,
-  type ResourceProfile,
-} from './vos/execution_policy.js';
-import {
-  type LoadMode,
-  LoadProfile,
-  type TimeUnit,
-} from './vos/load_profile.js';
+import type { ExecutionPolicy } from './vos/execution_policy.js';
+import type { LoadMode, LoadProfile, TimeUnit } from './vos/load_profile.js';
 import { type HttpMethod, Step, type StepCheck } from './vos/step.js';
 import { TargetSystem } from './vos/target_system.js';
 import { ThresholdPolicy } from './vos/threshold_policy.js';
@@ -38,8 +28,10 @@ export interface TestCaseDefinition {
   testType: TestType;
   targetSystem: TargetSystem;
   authStrategy: AuthStrategy;
+  /** Default load for runs that do not override it. */
   loadProfile: LoadProfile<LoadMode>;
   thresholdPolicy: ThresholdPolicy;
+  /** Default runner container for runs that do not override it. */
   executionPolicy: ExecutionPolicy;
   steps: Step[];
 }
@@ -65,12 +57,7 @@ export interface TestCaseDraft {
     minCheckSuccessRate?: number;
     abortOnFail?: boolean;
   };
-  executionPolicy: {
-    resourceProfile: ResourceProfile;
-    timeoutSeconds: number;
-    cpuMillicores?: number;
-    memoryMb?: number;
-  };
+  executionPolicy: ExecutionPolicyDraft;
   steps?: Array<{
     path: string;
     method: HttpMethod;
@@ -100,35 +87,18 @@ export function assertActorMayOwn(
   }
 }
 
-function resolveLoadProfile(draft: TestCaseDraft): LoadProfile<LoadMode> {
-  // A preset derives the shape the k6 guide prescribes for this test type; an
-  // explicit profile is taken as authored. Exactly one of the two is allowed.
-  if (Boolean(draft.loadProfile) === Boolean(draft.loadPreset)) {
-    throw new ValidationError(
-      'Provide exactly one of loadProfile (explicit stages) or loadPreset (derived from the test type)',
-    );
-  }
-
-  if (draft.loadPreset) {
-    return deriveLoadProfile(draft.testType, draft.loadPreset);
-  }
-
-  const explicit = draft.loadProfile as NonNullable<
-    TestCaseDraft['loadProfile']
-  >;
-  return LoadProfile.create(explicit.mode, explicit.config as never);
-}
-
 /**
  * Turns a draft into a definition, enforcing every rule that spans more than
- * one field: preset derivation, test type ↔ load mode compatibility, the
- * BREAKPOINT abort requirement, and a timeout long enough for the profile.
+ * one field: the default run configuration's rules (see
+ * `buildRunConfiguration`) and the BREAKPOINT abort requirement.
  */
 export function buildTestCaseDefinition(
   draft: TestCaseDraft,
 ): TestCaseDefinition {
-  const loadProfile = resolveLoadProfile(draft);
-  assertCompatibleLoadProfile(draft.testType, loadProfile.mode);
+  const { loadProfile, executionPolicy } = buildRunConfiguration(
+    draft.testType,
+    draft,
+  );
 
   const targetSystem = new TargetSystem(
     draft.targetSystem.baseUrl,
@@ -143,15 +113,7 @@ export function buildTestCaseDefinition(
     draft.thresholdPolicy.abortOnFail ?? false,
   );
 
-  const executionPolicy = new ExecutionPolicy(
-    draft.executionPolicy.resourceProfile,
-    draft.executionPolicy.timeoutSeconds,
-    draft.executionPolicy.cpuMillicores,
-    draft.executionPolicy.memoryMb,
-  );
-
   assertThresholdPolicyForType(draft.testType, thresholdPolicy);
-  assertTimeoutCoversProfile(loadProfile, executionPolicy);
 
   return {
     name: draft.name,

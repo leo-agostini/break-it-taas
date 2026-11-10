@@ -3,8 +3,14 @@ import { TestType } from './test_type.js';
 import { LoadMode, LoadProfile, type TimeUnit } from './vos/load_profile.js';
 import { Stage } from './vos/stage.js';
 
+/**
+ * The peak load of a derived profile, as exactly one of an arrival rate
+ * (`peakRate`, open model) or a number of virtual users (`peakVus`, closed
+ * model).
+ */
 export type LoadPreset = {
-  peakRate: number;
+  peakRate?: number;
+  peakVus?: number;
   duration: number;
   timeUnit: TimeUnit;
 };
@@ -13,10 +19,9 @@ export type LoadPreset = {
  * Fraction of the total duration each phase takes, per the k6 test-type guide
  * (https://grafana.com/docs/k6/latest/testing-guides/test-types/).
  *
- * The guide expresses these types in virtual users; this system is open-model
- * throughout, so the same shapes are applied to the request rate instead. The
- * shape is what distinguishes the types — a spike is a spike because it has no
- * plateau, whatever the load is measured in.
+ * The guide expresses these types in virtual users; the same shapes apply to a
+ * request rate. The shape is what distinguishes the types — a spike is a spike
+ * because it has no plateau, whatever the load is measured in.
  */
 const RAMP_SHAPE: Partial<
   Record<TestType, { rampUp: number; plateau: number; rampDown: number }>
@@ -27,21 +32,46 @@ const RAMP_SHAPE: Partial<
   [TestType.SPIKE]: { rampUp: 0.65, plateau: 0, rampDown: 0.35 },
 };
 
-function assertUsablePreset(preset: LoadPreset): void {
-  if (!Number.isFinite(preset.peakRate) || preset.peakRate < 1) {
-    throw new ValidationError('Peak rate must be at least 1');
+function resolvePeak(
+  testType: TestType,
+  preset: LoadPreset,
+): { peak: number; byVus: boolean } {
+  const hasRate = preset.peakRate !== undefined && preset.peakRate !== null;
+  const hasVus = preset.peakVus !== undefined && preset.peakVus !== null;
+  if (hasRate === hasVus) {
+    throw new ValidationError(
+      'A load preset needs exactly one of peakRate or peakVus',
+    );
+  }
+
+  const peak = Number(hasRate ? preset.peakRate : preset.peakVus);
+  if (!Number.isFinite(peak) || peak < 1) {
+    throw new ValidationError(
+      `${hasRate ? 'Peak rate' : 'Peak VUs'} must be at least 1`,
+    );
   }
   if (!Number.isInteger(preset.duration) || preset.duration < 1) {
     throw new ValidationError('Duration must be a whole number of at least 1');
   }
+  if (hasVus && testType === TestType.BREAKPOINT) {
+    throw new ValidationError(
+      'A BREAKPOINT preset needs peakRate: its result is the arrival rate the target breaks at',
+    );
+  }
+
+  return { peak, byVus: hasVus };
 }
 
-function buildRampStages(testType: TestType, preset: LoadPreset): Stage[] {
+function buildRampStages(
+  testType: TestType,
+  peak: number,
+  preset: LoadPreset,
+): Stage[] {
   const shape = RAMP_SHAPE[testType];
   if (!shape) {
     // BREAKPOINT: one continuously escalating stage, stopped by an
     // abortOnFail threshold rather than by reaching the end of the profile.
-    return [new Stage({ target: preset.peakRate, duration: preset.duration })];
+    return [new Stage({ target: peak, duration: preset.duration })];
   }
 
   const hasPlateau = shape.plateau > 0;
@@ -59,7 +89,7 @@ function buildRampStages(testType: TestType, preset: LoadPreset): Stage[] {
     // Give the ramp-down whatever the ramp-up did not take, so the phases
     // always add up to exactly the duration the user asked for.
     return [
-      new Stage({ target: preset.peakRate, duration: rampUp }),
+      new Stage({ target: peak, duration: rampUp }),
       new Stage({ target: 0, duration: Math.max(1, preset.duration - rampUp) }),
     ];
   }
@@ -72,8 +102,8 @@ function buildRampStages(testType: TestType, preset: LoadPreset): Stage[] {
   }
 
   return [
-    new Stage({ target: preset.peakRate, duration: rampUp }),
-    new Stage({ target: preset.peakRate, duration: plateau }),
+    new Stage({ target: peak, duration: rampUp }),
+    new Stage({ target: peak, duration: plateau }),
     new Stage({ target: 0, duration: rampDown }),
   ];
 }
@@ -89,19 +119,32 @@ export function deriveLoadProfile(
   testType: TestType,
   preset: LoadPreset,
 ): LoadProfile<LoadMode> {
-  assertUsablePreset(preset);
+  const { peak, byVus } = resolvePeak(testType, preset);
 
   if (testType === TestType.SMOKE || testType === TestType.SOAK) {
-    return LoadProfile.create(LoadMode.CONSTANT, {
-      targetRate: preset.peakRate,
-      duration: preset.duration,
-      timeUnit: preset.timeUnit,
-    });
+    return byVus
+      ? LoadProfile.create(LoadMode.CONSTANT_VUS, {
+          vus: peak,
+          duration: preset.duration,
+          timeUnit: preset.timeUnit,
+        })
+      : LoadProfile.create(LoadMode.CONSTANT, {
+          targetRate: peak,
+          duration: preset.duration,
+          timeUnit: preset.timeUnit,
+        });
   }
 
-  return LoadProfile.create(LoadMode.RAMP, {
-    initialRate: 0,
-    timeUnit: preset.timeUnit,
-    stages: buildRampStages(testType, preset),
-  });
+  const stages = buildRampStages(testType, peak, preset);
+  return byVus
+    ? LoadProfile.create(LoadMode.RAMPING_VUS, {
+        startVus: 0,
+        timeUnit: preset.timeUnit,
+        stages,
+      })
+    : LoadProfile.create(LoadMode.RAMP, {
+        initialRate: 0,
+        timeUnit: preset.timeUnit,
+        stages,
+      });
 }

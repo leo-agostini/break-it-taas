@@ -5,6 +5,11 @@ import { TestRunEvents } from '#modules/outbox/domain/events';
 import { OutboxService } from '#modules/outbox/services/outbox_service';
 import { NotFoundError } from '#modules/shared/domain/errors';
 import type { ActorContext, UUID } from '#modules/shared/domain/types';
+import {
+  type RunConfiguration,
+  type RunConfigurationOverride,
+  applyRunConfigurationOverride,
+} from '../domain/run_configuration.js';
 import { whereOwnedBy } from '../models/ownership.js';
 import TestRun from '../models/test_run.js';
 import TestRunMetric from '../models/test_run_metric.js';
@@ -15,14 +20,16 @@ export class TestRunService {
   constructor(private readonly outbox: OutboxService) {}
 
   /**
-   * Queues a new run and announces it on the outbox, inside the caller's
-   * transaction (ADR-001): the worker only ever sees runs that were committed.
+   * Queues a new run with the given configuration and announces it on the
+   * outbox, inside the caller's transaction (ADR-001): the worker only ever
+   * sees runs that were committed.
    */
   async request(
     testCaseId: UUID,
+    config: RunConfiguration,
     trx: TransactionClientContract,
   ): Promise<TestRun> {
-    const run = TestRun.draft(testCaseId);
+    const run = TestRun.draft(testCaseId, config);
     run.queue();
     run.useTransaction(trx);
     await run.save();
@@ -31,9 +38,22 @@ export class TestRunService {
     return run;
   }
 
-  async create(testCaseId: UUID, actor: ActorContext): Promise<TestRun> {
-    await findOwnedTestCase(testCaseId, actor);
-    return db.transaction((trx) => this.request(testCaseId, trx));
+  /**
+   * Starts a run of a test case at its default configuration, or at the load
+   * and container the override asks for.
+   */
+  async create(
+    testCaseId: UUID,
+    actor: ActorContext,
+    override: RunConfigurationOverride = {},
+  ): Promise<TestRun> {
+    const testCase = await findOwnedTestCase(testCaseId, actor);
+    const config = applyRunConfigurationOverride(
+      testCase.testType,
+      testCase.defaultRunConfiguration(),
+      override,
+    );
+    return db.transaction((trx) => this.request(testCaseId, config, trx));
   }
 
   async findOwned(testRunId: UUID, actor: ActorContext): Promise<TestRun> {

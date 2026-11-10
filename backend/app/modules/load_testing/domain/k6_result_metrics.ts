@@ -1,7 +1,8 @@
 import { loadProfileDurationSeconds } from '#modules/load_testing/domain/load_profile_duration';
-import type {
+import {
   LoadMode,
-  LoadProfile,
+  type LoadProfile,
+  isRateMode,
 } from '#modules/load_testing/domain/vos/load_profile';
 import type { UUID } from '#modules/shared/domain/types';
 import type { TestRunStatus } from './test_run_status.js';
@@ -15,10 +16,15 @@ export interface TestRunMetricsProjection {
   status: string;
   runtimeRef?: string;
   completedAt?: string;
+  /** Peak arrival rate a rate-mode profile asked for. */
   requestedRate?: number;
   requestedTimeUnit?: string;
+  /** Peak VU count a VU-mode profile asked for. */
+  requestedVus?: number;
   requestedDurationSeconds?: number;
   achievedRps?: number;
+  /** Largest VU pool k6 actually ran with. */
+  peakVus?: number;
   totalRequests?: number;
   droppedIterations?: number;
   failureRate?: number;
@@ -108,6 +114,35 @@ const toRequestedDurationSeconds = (
   return seconds > 0 ? seconds : undefined;
 };
 
+/** The highest load a profile reaches: its constant level or its top stage. */
+const peakOf = (base: unknown, stages: unknown): number | undefined => {
+  const targets = (Array.isArray(stages) ? stages : []).map((stage) =>
+    asNumber((stage as { target?: unknown }).target),
+  );
+  const values = [asNumber(base), ...targets].filter(
+    (value): value is number => typeof value === 'number',
+  );
+  return values.length > 0 ? Math.max(...values) : undefined;
+};
+
+const requestedLoad = (
+  loadProfile: LoadProfile<LoadMode>,
+): { requestedRate?: number; requestedVus?: number } => {
+  const config = loadProfile.config as Record<string, unknown>;
+  switch (loadProfile.mode) {
+    case LoadMode.CONSTANT:
+      return { requestedRate: asNumber(config.targetRate) };
+    case LoadMode.RAMP:
+      return { requestedRate: peakOf(config.initialRate, config.stages) };
+    case LoadMode.CONSTANT_VUS:
+      return { requestedVus: asNumber(config.vus) };
+    case LoadMode.RAMPING_VUS:
+      return { requestedVus: peakOf(config.startVus, config.stages) };
+    default:
+      return {};
+  }
+};
+
 export const normalizeK6ResultMetrics = (args: {
   testRunId: UUID;
   status: TestRunStatus;
@@ -123,10 +158,7 @@ export const normalizeK6ResultMetrics = (args: {
   const execution = asRecord(summary.execution);
 
   const loadConfig = args.loadProfile.config as Record<string, unknown>;
-  const requestedRate =
-    args.loadProfile.mode === 'CONSTANT'
-      ? asNumber(loadConfig.targetRate)
-      : asNumber(loadConfig.initialRate);
+  const { requestedRate, requestedVus } = requestedLoad(args.loadProfile);
   const requestedTimeUnit = String(loadConfig.timeUnit ?? 'SECONDS');
 
   const achievedRps = getMetricValue(metrics, 'http_reqs', 'rate');
@@ -168,11 +200,15 @@ export const normalizeK6ResultMetrics = (args: {
   const vusCurrent = getMetricValue(metrics, 'vus', 'value');
   const vusMax = getMetricValue(metrics, 'vus_max', 'value');
 
+  // Only an arrival-rate run can fall short of its load for lack of VUs. A VU
+  // run always uses its whole pool, so vus == vus_max there is the plan, not
+  // a limit.
   const generatorLimited =
-    (typeof droppedIterations === 'number' && droppedIterations > 0) ||
-    (typeof vusCurrent === 'number' &&
-      typeof vusMax === 'number' &&
-      vusCurrent >= vusMax);
+    isRateMode(args.loadProfile.mode) &&
+    ((typeof droppedIterations === 'number' && droppedIterations > 0) ||
+      (typeof vusCurrent === 'number' &&
+        typeof vusMax === 'number' &&
+        vusCurrent >= vusMax));
 
   return {
     testRunId: args.testRunId,
@@ -181,8 +217,10 @@ export const normalizeK6ResultMetrics = (args: {
     completedAt: args.completedAt,
     requestedRate,
     requestedTimeUnit,
+    requestedVus,
     requestedDurationSeconds: toRequestedDurationSeconds(args.loadProfile),
     achievedRps: roundNumber(achievedRps, 4),
+    peakVus: roundNumber(vusMax, 0),
     totalRequests,
     droppedIterations,
     failureRate: roundNumber(failureRate, 6),

@@ -4,32 +4,28 @@ import type { DateTime } from 'luxon';
 import { newId } from '#modules/shared/domain/ids';
 import type { UUID } from '#modules/shared/domain/types';
 import { jsonb } from '#modules/shared/models/columns';
+import type { RunConfiguration } from '../domain/run_configuration.js';
 import type { TestCaseDefinition } from '../domain/test_case_definition.js';
 import type { TestCaseOwnerType, TestType } from '../domain/test_type.js';
 import type { AuthStrategy } from '../domain/vos/auth_strategy.js';
-import {
-  ExecutionPolicy,
-  type ResourceProfile,
-} from '../domain/vos/execution_policy.js';
-import { type LoadMode, LoadProfile } from '../domain/vos/load_profile.js';
 import { type HttpMethod, Step, type StepCheck } from '../domain/vos/step.js';
 import { TargetSystem } from '../domain/vos/target_system.js';
 import { ThresholdPolicy } from '../domain/vos/threshold_policy.js';
+import {
+  type StoredExecutionPolicy,
+  type StoredLoadProfile,
+  fromStoredExecutionPolicy,
+  fromStoredLoadProfile,
+  toStoredRunConfiguration,
+} from './stored_run_configuration.js';
 import TestRun from './test_run.js';
 
-type StoredLoadProfile = { mode: LoadMode; config: Record<string, unknown> };
 type StoredThresholdPolicy = {
   maxErrorRate?: number;
   maxP95ResponseTimeMs?: number;
   maxP99ResponseTimeMs?: number;
   minCheckSuccessRate?: number;
   abortOnFail?: boolean;
-};
-type StoredExecutionPolicy = {
-  resourceProfile: ResourceProfile;
-  timeoutSeconds: number;
-  cpuMillicores?: number;
-  memoryMb?: number;
 };
 type StoredStep = {
   path: string;
@@ -71,12 +67,14 @@ export default class TestCase extends BaseModel {
   @column(jsonb)
   declare authStrategy: AuthStrategy;
 
+  /** Default load for runs that do not override it. */
   @column(jsonb)
   declare loadProfile: StoredLoadProfile;
 
   @column(jsonb)
   declare thresholdPolicy: StoredThresholdPolicy;
 
+  /** Default runner container for runs that do not override it. */
   @column(jsonb)
   declare executionPolicy: StoredExecutionPolicy;
 
@@ -96,6 +94,7 @@ export default class TestCase extends BaseModel {
 
   static fromDefinition(definition: TestCaseDefinition): TestCase {
     const testCase = new TestCase();
+    const defaults = toStoredRunConfiguration(definition);
     testCase.fill({
       name: definition.name,
       description: definition.description ?? null,
@@ -106,9 +105,9 @@ export default class TestCase extends BaseModel {
       // objects they serialize to.
       targetSystem: JSON.parse(JSON.stringify(definition.targetSystem)),
       authStrategy: definition.authStrategy,
-      loadProfile: JSON.parse(JSON.stringify(definition.loadProfile)),
+      loadProfile: defaults.loadProfile,
       thresholdPolicy: JSON.parse(JSON.stringify(definition.thresholdPolicy)),
-      executionPolicy: JSON.parse(JSON.stringify(definition.executionPolicy)),
+      executionPolicy: defaults.executionPolicy,
       steps: JSON.parse(JSON.stringify(definition.steps)),
     });
     return testCase;
@@ -127,10 +126,7 @@ export default class TestCase extends BaseModel {
         this.targetSystem.environment,
       ),
       authStrategy: this.authStrategy,
-      loadProfile: LoadProfile.create(
-        this.loadProfile.mode,
-        this.loadProfile.config as never,
-      ),
+      loadProfile: fromStoredLoadProfile(this.loadProfile),
       thresholdPolicy: new ThresholdPolicy(
         this.thresholdPolicy.maxErrorRate,
         this.thresholdPolicy.maxP95ResponseTimeMs,
@@ -138,12 +134,7 @@ export default class TestCase extends BaseModel {
         this.thresholdPolicy.minCheckSuccessRate,
         this.thresholdPolicy.abortOnFail ?? false,
       ),
-      executionPolicy: new ExecutionPolicy(
-        this.executionPolicy.resourceProfile,
-        this.executionPolicy.timeoutSeconds,
-        this.executionPolicy.cpuMillicores,
-        this.executionPolicy.memoryMb,
-      ),
+      executionPolicy: fromStoredExecutionPolicy(this.executionPolicy),
       steps: (Array.isArray(this.steps) ? this.steps : []).map(
         (step) =>
           new Step(
@@ -154,6 +145,14 @@ export default class TestCase extends BaseModel {
             step.headers,
           ),
       ),
+    };
+  }
+
+  /** The configuration a run uses when it does not override anything. */
+  defaultRunConfiguration(): RunConfiguration {
+    return {
+      loadProfile: fromStoredLoadProfile(this.loadProfile),
+      executionPolicy: fromStoredExecutionPolicy(this.executionPolicy),
     };
   }
 }

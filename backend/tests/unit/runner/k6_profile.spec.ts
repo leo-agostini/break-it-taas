@@ -71,6 +71,92 @@ test.group('k6 runner scenario building', () => {
 
     expect(scenario.stages?.[1]).toEqual({ target: 0, duration: '60s' });
   });
+
+  test('runs a CONSTANT_VUS profile as constant VUs', ({ expect }) => {
+    const scenario = buildScenario({
+      mode: 'CONSTANT_VUS',
+      config: { vus: 200, duration: 2, timeUnit: 'MINUTES' },
+    });
+
+    expect(scenario).toEqual({
+      executor: 'constant-vus',
+      vus: 200,
+      duration: '120s',
+    });
+  });
+
+  test('runs a RAMPING_VUS profile as ramping VUs down to zero', ({
+    expect,
+  }) => {
+    const scenario = buildScenario({
+      mode: 'RAMPING_VUS',
+      config: {
+        startVus: 0,
+        timeUnit: 'SECONDS',
+        stages: [
+          { target: 300, duration: 30 },
+          { target: 0, duration: 10 },
+        ],
+      },
+    });
+
+    expect(scenario).toEqual({
+      executor: 'ramping-vus',
+      startVUs: 0,
+      stages: [
+        { target: 300, duration: '30s' },
+        { target: 0, duration: '10s' },
+      ],
+    });
+  });
+
+  test('caps VU profiles at the runner limit', ({ expect }) => {
+    const scenario = buildScenario(
+      {
+        mode: 'CONSTANT_VUS',
+        config: { vus: 10_000, duration: 30, timeUnit: 'SECONDS' },
+      },
+      { maxVUsCap: 500 },
+    );
+
+    expect(scenario.vus).toBe(500);
+  });
+
+  test('uses the VU pool a rate run asked for instead of the estimate', ({
+    expect,
+  }) => {
+    const scenario = buildScenario({
+      mode: 'CONSTANT',
+      config: {
+        targetRate: 5000,
+        duration: 60,
+        timeUnit: 'SECONDS',
+        vus: { preAllocated: 800, max: 1500 },
+      },
+    });
+
+    expect(scenario.executor).toBe('constant-arrival-rate');
+    expect(scenario.preAllocatedVUs).toBe(800);
+    expect(scenario.maxVUs).toBe(1500);
+  });
+
+  test('keeps a requested VU pool under the runner limit', ({ expect }) => {
+    const scenario = buildScenario(
+      {
+        mode: 'RAMP',
+        config: {
+          initialRate: 0,
+          timeUnit: 'SECONDS',
+          stages: [{ target: 5000, duration: 60 }],
+          vus: { preAllocated: 3000, max: 9000 },
+        },
+      },
+      { maxVUsCap: 2000 },
+    );
+
+    expect(scenario.preAllocatedVUs).toBe(2000);
+    expect(scenario.maxVUs).toBe(2000);
+  });
 });
 
 test.group('k6 runner threshold building', () => {
@@ -219,5 +305,21 @@ test.group('k6 runner breaking point', () => {
     };
 
     expect(thresholdsBreached(summary)).toBe(false);
+  });
+
+  test('reports no breaking point rate for a VU profile', ({ expect }) => {
+    expect(
+      resolveBreakingPoint(
+        {
+          mode: 'RAMPING_VUS',
+          config: {
+            startVus: 0,
+            timeUnit: 'SECONDS',
+            stages: [{ target: 100, duration: 60 }],
+          },
+        },
+        30,
+      ),
+    ).toBeNull();
   });
 });

@@ -6,7 +6,10 @@ import {
   LoadMode,
   TimeUnit,
 } from '#modules/load_testing/domain/vos/load_profile';
-import type { RampLoadProfileSetup } from '#modules/load_testing/domain/vos/load_profile';
+import type {
+  RampLoadProfileSetup,
+  RampingVusLoadProfileSetup,
+} from '#modules/load_testing/domain/vos/load_profile';
 import { ValidationError } from '#modules/shared/domain/errors';
 
 test.group('deriveLoadProfile', () => {
@@ -141,6 +144,62 @@ test.group('deriveLoadProfile', () => {
       deriveLoadProfile(TestType.SMOKE, {
         peakRate: 0,
         duration: 1,
+        timeUnit: TimeUnit.MINUTES,
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  test('derives a VU profile of the same shape from peakVus', ({ expect }) => {
+    const profile = deriveLoadProfile(TestType.AVG_LOAD, {
+      peakVus: 200,
+      duration: 10,
+      timeUnit: TimeUnit.MINUTES,
+    });
+
+    expect(profile.mode).toBe(LoadMode.RAMPING_VUS);
+    const config = profile.config as RampingVusLoadProfileSetup;
+    expect(config.startVus).toBe(0);
+    expect(config.stages.map((stage) => stage.target)).toEqual([200, 200, 0]);
+    expect(config.stages.map((stage) => stage.duration)).toEqual([1, 8, 1]);
+  });
+
+  test('holds SMOKE at a constant VU count from peakVus', ({ expect }) => {
+    const profile = deriveLoadProfile(TestType.SMOKE, {
+      peakVus: 3,
+      duration: 1,
+      timeUnit: TimeUnit.MINUTES,
+    });
+
+    expect(profile.mode).toBe(LoadMode.CONSTANT_VUS);
+    expect(profile.config).toEqual({
+      vus: 3,
+      duration: 1,
+      timeUnit: TimeUnit.MINUTES,
+    });
+  });
+
+  test('requires exactly one of peakRate or peakVus', ({ expect }) => {
+    expect(() =>
+      deriveLoadProfile(TestType.SMOKE, {
+        peakRate: 5,
+        peakVus: 5,
+        duration: 1,
+        timeUnit: TimeUnit.MINUTES,
+      }),
+    ).toThrow(ValidationError);
+    expect(() =>
+      deriveLoadProfile(TestType.SMOKE, {
+        duration: 1,
+        timeUnit: TimeUnit.MINUTES,
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  test('rejects a BREAKPOINT preset measured in VUs', ({ expect }) => {
+    expect(() =>
+      deriveLoadProfile(TestType.BREAKPOINT, {
+        peakVus: 500,
+        duration: 10,
         timeUnit: TimeUnit.MINUTES,
       }),
     ).toThrow(ValidationError);
