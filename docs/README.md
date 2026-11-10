@@ -31,6 +31,11 @@ Os documentos foram iniciados apenas com conhecimento já consolidado no projeto
 - [`03-decisions/ADR-006-compose-first-local-environment.md`](03-decisions/ADR-006-compose-first-local-environment.md) — ambiente local via Docker Compose, cluster só para Jobs
 - [`03-decisions/ADR-007-adonis-modular-monolith.md`](03-decisions/ADR-007-adonis-modular-monolith.md) — backend como monólito modular MVC em AdonisJS, com núcleo de domínio isolado
 - [`03-decisions/ADR-008-session-auth.md`](03-decisions/ADR-008-session-auth.md) — autenticação por sessão do AdonisJS
+- [`03-decisions/ADR-009-observability-collected-outside-cluster.md`](03-decisions/ADR-009-observability-collected-outside-cluster.md) — observabilidade coletada de fora do cluster, Faro no frontend
+
+## Operação
+
+- [`05-operations/observability.md`](05-operations/observability.md) — como ligar a observabilidade local e o que cada dashboard mostra
 
 ## Documentação específica de módulo
 

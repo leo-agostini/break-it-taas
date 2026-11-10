@@ -1,3 +1,4 @@
+import logger from '@adonisjs/core/services/logger';
 import db from '@adonisjs/lucid/services/db';
 import {
   OutboxEventStatus,
@@ -5,6 +6,11 @@ import {
 } from '../domain/dispatch_policy.js';
 import type { OutboxEventPayloads, OutboxEventType } from '../domain/events.js';
 import OutboxEvent from '../models/outbox_event.js';
+import {
+  type DispatchOutcome,
+  type OutboxTelemetry,
+  otelOutboxTelemetry,
+} from './outbox_telemetry.js';
 
 const TABLE = 'outbox_events';
 
@@ -26,6 +32,10 @@ export class OutboxDispatcher {
     OutboxEventHandler<OutboxEventType>
   >();
 
+  constructor(
+    private readonly telemetry: OutboxTelemetry = otelOutboxTelemetry,
+  ) {}
+
   on<TType extends OutboxEventType>(
     type: TType,
     handler: OutboxEventHandler<TType>,
@@ -38,32 +48,53 @@ export class OutboxDispatcher {
     const events = await this.claimBatch(limit);
 
     for (const event of events) {
-      const handler = this.handlers.get(event.type);
+      await this.telemetry.observeDispatch(event, () => this.dispatch(event));
+    }
+  }
 
-      if (!handler) {
-        await this.markFailed(
-          event,
-          `Unsupported outbox event type: ${event.type}`,
+  private async dispatch(event: OutboxEvent): Promise<DispatchOutcome> {
+    const handler = this.handlers.get(event.type);
+    const context = {
+      eventId: event.id,
+      type: event.type,
+      attempt: event.attempts + 1,
+    };
+
+    if (!handler) {
+      const error = `Unsupported outbox event type: ${event.type}`;
+      await this.markFailed(event, error);
+      logger.error(context, 'Outbox event parked as FAILED: %s', error);
+      return { result: 'failed', error };
+    }
+
+    try {
+      await handler(event.payload);
+      await this.markPublished(event);
+      return { result: 'published' };
+    } catch (cause) {
+      const error =
+        cause instanceof Error ? cause.message : 'Unexpected outbox error';
+      const outcome = afterDispatchFailure({ attemptsSoFar: event.attempts });
+
+      if (outcome.status === OutboxEventStatus.FAILED) {
+        await this.markFailed(event, error);
+        logger.error(
+          { ...context, err: cause },
+          'Outbox event parked as FAILED after its last attempt',
         );
-        continue;
+        return { result: 'failed', error };
       }
 
-      try {
-        await handler(event.payload);
-        await this.markPublished(event);
-      } catch (error) {
-        const message =
-          error instanceof Error ? error.message : 'Unexpected outbox error';
-        const outcome = afterDispatchFailure({
-          attemptsSoFar: event.attempts,
-        });
-
-        if (outcome.status === OutboxEventStatus.FAILED) {
-          await this.markFailed(event, message);
-        } else {
-          await this.markRetry(event, message, outcome.nextAttemptAt);
-        }
-      }
+      await this.markRetry(event, error, outcome.nextAttemptAt);
+      logger.warn(
+        {
+          ...context,
+          err: cause,
+          nextAttemptAt: outcome.nextAttemptAt.toISOString(),
+        },
+        'Outbox event dispatch failed, retry scheduled',
+      );
+      return { result: 'retried', error };
     }
   }
 

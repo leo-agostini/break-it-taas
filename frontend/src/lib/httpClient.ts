@@ -1,4 +1,5 @@
 import { API_SERVER_URL, API_URL } from '@/lib/env';
+import { reportApiError } from '@/lib/observability';
 import axios from 'axios';
 
 /*
@@ -22,6 +23,15 @@ export const privateHttpClient = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+// Browser clients only: reportApiError is a no-op until Faro is initialized,
+// which never happens on the server.
+for (const client of [publicHttpClient, privateHttpClient]) {
+  client.interceptors.response.use(undefined, (error: unknown) => {
+    reportApiError(error);
+    return Promise.reject(error);
+  });
+}
 
 function resolveServerBaseUrl(request: Request) {
   const requestUrl = new URL(request.url);

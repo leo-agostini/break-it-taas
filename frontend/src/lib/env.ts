@@ -16,6 +16,8 @@ declare global {
     readonly VITE_API_URL?: string;
     /** Base URL the SSR process uses to reach the backend API. */
     readonly VITE_API_SERVER_URL?: string;
+    /** Grafana Faro collector URL. Empty disables browser telemetry. */
+    readonly VITE_FARO_URL?: string;
   }
 }
 
@@ -30,6 +32,13 @@ export const API_URL = import.meta.env.VITE_API_URL ?? DEFAULT_API_URL;
  * request origin.
  */
 export const API_SERVER_URL = import.meta.env.VITE_API_SERVER_URL ?? API_URL;
+
+/**
+ * Grafana Faro collector (Alloy's faro.receiver). Empty, the default, turns
+ * browser telemetry off, so a build without the observability stack never
+ * tries to reach a collector that is not there.
+ */
+export const FARO_URL = import.meta.env.VITE_FARO_URL ?? '';
 
 /** Vite's build mode (`development`, `production`, ...). */
 export const MODE = import.meta.env.MODE;
@@ -46,6 +55,7 @@ export const IS_SSR = import.meta.env.SSR;
 export const env = {
   API_URL,
   API_SERVER_URL,
+  FARO_URL,
   MODE,
   IS_DEV,
   IS_PROD,

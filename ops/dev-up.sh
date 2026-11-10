@@ -9,6 +9,11 @@
 # The worker runs here rather than in Compose because it dispatches Kubernetes
 # Jobs and needs your kubeconfig. Ctrl-C stops the worker; the Compose stack and
 # the cluster keep running. Use ops/dev-down.sh to tear everything down.
+#
+# OBSERVABILITY=1 also starts the Compose "observability" profile (Grafana,
+# Prometheus, Loki, Tempo, Alloy, kube-state-metrics), gives it read-only access
+# to the cluster, and turns on API and browser telemetry. Off by default: it
+# roughly doubles the stack's memory.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,6 +23,7 @@ RUNNER_IMAGE="${RUNNER_IMAGE:-breakit-k6-runner:local}"
 API_PORT="${API_PORT:-3001}"
 LOAD_TARGET_PORT="${LOAD_TARGET_PORT:-8080}"
 SKIP_WORKER="${SKIP_WORKER:-0}"
+OBSERVABILITY="${OBSERVABILITY:-0}"
 
 require_command docker
 require_command kind
@@ -32,8 +38,21 @@ log "[2/6] Building and loading the k6 runner image"
 docker build -t "${RUNNER_IMAGE}" "${SCRIPT_DIR}/k6-runner"
 kind load docker-image "${RUNNER_IMAGE}" --name "${WORKLOAD_CLUSTER_NAME}"
 
+compose_args=()
+if [[ "${OBSERVABILITY}" == "1" ]]; then
+  log "      OBSERVABILITY=1: granting the observability stack read-only cluster access"
+  bash "${SCRIPT_DIR}/observability/write-kubeconfig.sh"
+  compose_args=(--profile observability)
+  # Read by docker-compose.yml (the API's OpenTelemetry SDK and the frontend's
+  # Faro collector URL, a build arg) and by the worker started below.
+  export OTEL_SDK_DISABLED=false
+  export VITE_FARO_URL="${VITE_FARO_URL:-http://localhost:12347/collect}"
+fi
+
 log "[3/6] Starting the Compose stack"
-docker compose up -d --build
+# The ${a[@]+...} form expands an empty array safely under `set -u` on macOS's
+# bash 3.2, where a bare "${compose_args[@]}" aborts with "unbound variable".
+docker compose ${compose_args[@]+"${compose_args[@]}"} up -d --build
 
 # Runner pods live in the cluster and cannot reach localhost. Everything they
 # call — the callback endpoint on the API, and the load target — is published on
@@ -63,6 +82,9 @@ log "      Frontend       http://localhost:3000"
 log "      PostgreSQL     postgres://postgres:postgres@localhost:5432/app"
 log "      Load target    http://localhost:${LOAD_TARGET_PORT} (pods: ${TARGET_BASE_URL})"
 log "      Runner callback ${CALLBACK_BASE_URL}"
+if [[ "${OBSERVABILITY}" == "1" ]]; then
+  log "      Grafana        http://localhost:3002 (dashboards in the 'Break It TaaS' folder)"
+fi
 
 if [[ "${SKIP_WORKER}" == "1" ]]; then
   log "[6/6] SKIP_WORKER=1 — not starting the worker"
@@ -85,4 +107,6 @@ exec env \
   LOG_LEVEL="${LOG_LEVEL:-info}" \
   APP_URL="${APP_URL:-http://localhost:${API_PORT}}" \
   SESSION_DRIVER="${SESSION_DRIVER:-cookie}" \
+  OTEL_SDK_DISABLED="${OTEL_SDK_DISABLED:-true}" \
+  OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}" \
   npm --workspace backend run worker:dev

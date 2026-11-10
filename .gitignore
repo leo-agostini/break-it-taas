@@ -147,3 +147,6 @@ vite.config.ts.timestamp-*
 frontend/build/
 frontend/.react-router/
 backend/dist/
+
+# Telemetry-reader token and kubeconfig, written by ops/observability/write-kubeconfig.sh
+ops/observability/.kube/

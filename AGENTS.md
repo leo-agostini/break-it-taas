@@ -29,7 +29,7 @@ never `localhost`. See [ADR-006](docs/03-decisions/ADR-006-compose-first-local-e
 Run from the repo root unless noted:
 
 - `npm install` — install all workspaces
-- `./ops/dev-up.sh` (or `make up`) — start the whole environment and run the worker
+- `./ops/dev-up.sh` (or `make up`) — start the whole environment and run the worker; `OBSERVABILITY=1` (or `make up-obs`) adds Grafana on :3002 plus API/browser telemetry (see [ADR-009](docs/03-decisions/ADR-009-observability-collected-outside-cluster.md))
 - `./ops/dev-down.sh` (or `make down`) — stop it; `--cluster` also deletes the cluster
 - `npm run smoke` — end-to-end check, requires `dev-up.sh` running
 - `npm run dev` — run backend + frontend in parallel (turbo)

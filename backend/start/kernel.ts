@@ -29,6 +29,7 @@ server.use([
  * Runs on every request with a registered route.
  */
 router.use([
+  () => import('@adonisjs/otel/otel_middleware'),
   () => import('@adonisjs/core/bodyparser_middleware'),
   () => import('@adonisjs/session/session_middleware'),
   () => import('@adonisjs/auth/initialize_auth_middleware'),

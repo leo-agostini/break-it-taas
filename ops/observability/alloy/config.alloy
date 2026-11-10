@@ -1,10 +1,14 @@
 // Grafana Alloy — the single telemetry collector for Break It TaaS.
 //
-// It plays three roles at once, which is why there is no separate
+// It plays several roles at once, which is why there is no separate
 // otel-collector, promtail or cadvisor container:
-//   1. OTLP receiver for app telemetry (browser, SSR, API, worker, cluster).
-//   2. Docker log tailer for every Compose container.
-//   3. cAdvisor scraper for per-container CPU/memory/network.
+//   1. OTLP receiver for app telemetry: API traces and metrics; outbox worker
+//      traces, metrics and logs (it runs on the host, so stdout is not tailed).
+//   2. Faro receiver for browser telemetry (errors, sessions, web vitals).
+//   3. Docker log tailer for every Compose container.
+//   4. cAdvisor scraper for per-container CPU/memory/network/disk.
+//   5. Reader of the kind cluster from outside it: runner pod logs, kubelet
+//      cAdvisor and kube-state-metrics (see ADR-009).
 //
 // Fan-out is always the same: traces -> Tempo, logs -> Loki, metrics -> Prometheus.
 
@@ -46,7 +50,7 @@ otelcol.processor.batch "default" {
   output {
     traces  = [otelcol.exporter.otlp.tempo.input]
     metrics = [otelcol.exporter.prometheus.default.input]
-    logs    = [otelcol.exporter.loki.default.input]
+    logs    = [otelcol.exporter.otlphttp.loki.input]
   }
 }
 
@@ -64,7 +68,51 @@ otelcol.exporter.prometheus "default" {
   forward_to = [prometheus.remote_write.default.receiver]
 }
 
-otelcol.exporter.loki "default" {
+// OTLP logs go to Loki's native OTLP endpoint rather than through
+// otelcol.exporter.loki: service.name becomes the service_name label, and
+// trace_id/span_id plus the pino fields become structured metadata, so the
+// line stays the plain log message.
+otelcol.exporter.otlphttp "loki" {
+  client {
+    endpoint = "http://loki:3100/otlp"
+  }
+}
+
+// ── Browser telemetry (Grafana Faro) ──────────────────────────────────────────
+// The frontend's Faro SDK POSTs errors, console logs, sessions, page views and
+// web vitals here, cross-origin from http://localhost:3000. Everything becomes a
+// logfmt line in Loki; the frontend dashboard derives its numbers with LogQL.
+faro.receiver "frontend" {
+  server {
+    listen_address       = "0.0.0.0"
+    listen_port          = 12347
+    cors_allowed_origins = ["http://localhost:3000"]
+  }
+
+  extra_log_labels = { source = "faro" }
+
+  output {
+    logs = [loki.process.faro.receiver]
+  }
+}
+
+// Only `kind` (exception, log, measurement, event) and `app_name` become labels:
+// both are tiny sets. session_id, page_url and the rest stay in the line.
+loki.process "faro" {
+  stage.logfmt {
+    mapping = {
+      kind     = "",
+      app_name = "",
+    }
+  }
+
+  stage.labels {
+    values = {
+      kind     = "",
+      app_name = "",
+    }
+  }
+
   forward_to = [loki.write.default.receiver]
 }
 
@@ -114,6 +162,13 @@ loki.process "app_logs" {
       trace_id = "trace_id",
       span_id  = "span_id",
     }
+  }
+
+  // pino writes numeric levels (30, 50); name them so dashboards can filter on
+  // level="error" instead of a magic number. Lines without a level stay empty.
+  stage.template {
+    source   = "level"
+    template = `{{ if eq .Value "10" }}trace{{ else if eq .Value "20" }}debug{{ else if eq .Value "30" }}info{{ else if eq .Value "40" }}warn{{ else if eq .Value "50" }}error{{ else if eq .Value "60" }}fatal{{ else }}{{ .Value }}{{ end }}`
   }
 
   stage.labels {
@@ -168,6 +223,137 @@ prometheus.scrape "alloy" {
   forward_to      = [prometheus.remote_write.default.receiver]
   scrape_interval = "30s"
   job_name        = "alloy"
+}
+
+// ── kind cluster, read from outside ───────────────────────────────────────────
+// The cluster runs only runner Jobs, so no agent lives there. This container
+// joins the `kind` Docker network and reads the API server with the read-only
+// telemetry-reader token that ops/observability/write-kubeconfig.sh exports to
+// /etc/kube. Without that file these components report unhealthy and the rest
+// of the pipeline keeps working.
+
+// Runner Job state (active, pending, succeeded, failed). kube-state-metrics
+// runs in Compose too, against the same kubeconfig.
+prometheus.scrape "kube_state_metrics" {
+  targets = [
+    { __address__ = "kube-state-metrics:8080" },
+  ]
+  forward_to      = [prometheus.remote_write.default.receiver]
+  scrape_interval = "15s"
+  job_name        = "kube-state-metrics"
+}
+
+// Kubelets are not reachable from here, so each node's cAdvisor endpoint is
+// scraped through the API server's node proxy instead.
+discovery.kubernetes "nodes" {
+  role            = "node"
+  kubeconfig_file = "/etc/kube/config"
+}
+
+discovery.relabel "kubelet_cadvisor" {
+  targets = discovery.kubernetes.nodes.targets
+
+  // KIND_API_ADDRESS (<cluster>-control-plane:6443) is set in docker-compose.yml.
+  rule {
+    target_label = "__address__"
+    replacement  = sys.env("KIND_API_ADDRESS")
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    target_label  = "__metrics_path__"
+    replacement   = "/api/v1/nodes/${1}/proxy/metrics/cadvisor"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    target_label  = "node"
+  }
+}
+
+prometheus.scrape "kubelet_cadvisor" {
+  targets         = discovery.relabel.kubelet_cadvisor.output
+  forward_to      = [prometheus.relabel.runner_pods_only.receiver]
+  scrape_interval = "15s"
+  job_name        = "kubelet-cadvisor"
+  scheme          = "https"
+
+  bearer_token_file = "/etc/kube/token"
+
+  tls_config {
+    ca_file = "/etc/kube/ca.crt"
+  }
+}
+
+// Every node reports every system pod too; only runner pods are worth storing.
+// The scrape's own `up` series is kept so a broken node proxy is visible.
+prometheus.relabel "runner_pods_only" {
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  rule {
+    source_labels = ["__name__", "namespace"]
+    regex         = "up;.*|.*;app"
+    action        = "keep"
+  }
+}
+
+// Runner pod logs (k6 output). Pods are short-lived and deleted 10 minutes
+// after their Job finishes (ttlSecondsAfterFinished), so tailing them live is
+// the only chance to keep those logs.
+discovery.kubernetes "runner_pods" {
+  role            = "pod"
+  kubeconfig_file = "/etc/kube/config"
+
+  namespaces {
+    names = ["app"]
+  }
+}
+
+discovery.relabel "runner_pods" {
+  targets = discovery.kubernetes.runner_pods.targets
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+
+  // Kubernetes stamps every Job pod with job-name. The breakit/test-run-id
+  // label is deliberately NOT promoted: the pod name already identifies the
+  // run, and a second per-run label would only add index cardinality.
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_job_name"]
+    target_label  = "job_name"
+  }
+}
+
+loki.source.kubernetes "runner_pods" {
+  targets    = discovery.relabel.runner_pods.output
+  forward_to = [loki.process.runner_logs.receiver]
+
+  client {
+    kubeconfig_file = "/etc/kube/config"
+  }
+}
+
+loki.process "runner_logs" {
+  stage.static_labels {
+    values = {
+      job    = "kubernetes",
+      source = "kubernetes",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
 }
 
 prometheus.remote_write "default" {

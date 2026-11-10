@@ -28,6 +28,12 @@ x-backend-env: &backend-env
     RUNNER_IMAGE: breakit-k6-runner:local
     KUBERNETES_NAMESPACE: app
     DATABASE_URL: postgres://postgres:postgres@postgres:5432/app
+    # OpenTelemetry (backend/config/otel.ts). Off unless the observability
+    # profile is up — ops/dev-up.sh flips it with OBSERVABILITY=1 — so the plain
+    # stack does not keep retrying an Alloy that is not there.
+    APP_NAME: breakit-backend
+    OTEL_SDK_DISABLED: ${OTEL_SDK_DISABLED:-true}
+    OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
 
 services:
     frontend:
@@ -39,6 +45,9 @@ services:
             args:
                 - VITE_API_URL=http://localhost:3001/api
                 - VITE_API_SERVER_URL=http://backend:3001/api
+                # Faro collector; empty (the default) builds without browser
+                # telemetry. ops/dev-up.sh sets it with OBSERVABILITY=1.
+                - VITE_FARO_URL=${VITE_FARO_URL:-}
         container_name: breakit-frontend
         ports:
             - "3000:3000"
@@ -118,10 +127,13 @@ services:
     # them on the same default network, so `backend` and `frontend` can resolve
     # `alloy` by name with no extra network wiring.
 
-    # The single collector: OTLP receiver, Docker log tailer, and cAdvisor
-    # scraper in one process. Replaces otel-collector + promtail + cadvisor.
+    # The single collector: OTLP and Faro receiver, Docker log tailer, cAdvisor
+    # scraper, and reader of the kind cluster, in one process. Replaces
+    # otel-collector + promtail + cadvisor + an in-cluster agent.
     alloy:
-        image: grafana/alloy:v1.18.1
+        # >= v1.20: older faro.receivers reject the Idempotency-Key header that
+        # the Faro web SDK (2.x) sends, so every browser preflight fails CORS.
+        image: grafana/alloy:v1.21.2
         container_name: breakit-alloy
         profiles: ["observability"]
         # Root is required to read the Docker socket; the socket itself is
@@ -132,10 +144,15 @@ services:
             - --server.http.listen-addr=0.0.0.0:12345
             - --storage.path=/var/lib/alloy/data
             - /etc/alloy/config.alloy
+        environment:
+            - KIND_API_ADDRESS=${WORKLOAD_CLUSTER_NAME:-taas-dev}-control-plane:6443
+        # `kind` is how Alloy reaches the cluster's API server (ADR-009).
+        networks: [default, kind]
         ports:
             - "4317:4317"   # OTLP gRPC
-            - "4318:4318"   # OTLP HTTP (browser exporter targets this)
+            - "4318:4318"   # OTLP HTTP
             - "12345:12345" # Alloy's own UI
+            - "12347:12347" # Faro receiver (browser telemetry)
         volumes:
             - ./ops/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
             - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -150,6 +167,8 @@ services:
             # "unable to create containerd client" and emits no per-container
             # series at all.
             - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+            # Read-only cluster credentials from ops/observability/write-kubeconfig.sh.
+            - ./ops/observability/.kube:/etc/kube:ro
             - alloy-data:/var/lib/alloy/data
         depends_on:
             - loki
@@ -158,7 +177,28 @@ services:
         deploy:
             resources:
                 limits:
-                    memory: 200M
+                    # 200M was OOM-killed by cAdvisor alone; the cluster
+                    # discovery and log tailing add to that.
+                    memory: 400M
+
+    # Runner Job and pod state for the test-runners dashboard. It runs here, not
+    # in the cluster, and watches the API server through the read-only
+    # telemetry-reader kubeconfig, scoped to the runner namespace.
+    kube-state-metrics:
+        image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.20.0
+        container_name: breakit-kube-state-metrics
+        profiles: ["observability"]
+        command:
+            - --kubeconfig=/etc/kube/config
+            - --namespaces=app
+            - --resources=jobs,pods
+        networks: [default, kind]
+        volumes:
+            - ./ops/observability/.kube:/etc/kube:ro
+        deploy:
+            resources:
+                limits:
+                    memory: 64M
 
     prometheus:
         image: prom/prometheus:v3.1.0
@@ -247,6 +287,10 @@ services:
         profiles: ["observability"]
         environment:
             - DATA_SOURCE_NAME=postgresql://postgres:postgres@postgres:5432/app?sslmode=disable
+        # Outbox backlog gauges (see the file for why they live here).
+        command: ["--extend.query-path=/etc/postgres-exporter/queries.yaml"]
+        volumes:
+            - ./ops/observability/postgres-exporter/queries.yaml:/etc/postgres-exporter/queries.yaml:ro
         ports:
             - "9187:9187"
         depends_on:
@@ -256,6 +300,13 @@ services:
             resources:
                 limits:
                     memory: 64M
+
+# Created by kind. Only the observability profile joins it, so the plain stack
+# starts without a cluster.
+networks:
+    kind:
+        external: true
+        name: kind
 
 volumes:
     postgres-data:

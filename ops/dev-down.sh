@@ -20,12 +20,14 @@ done
 
 require_command docker
 
+# Naming the observability profile makes `down` include its containers when
+# they are running; it is harmless when they are not.
 log "Stopping the Compose stack"
 if [[ "${DELETE_VOLUMES}" == "1" ]]; then
-  log "  (--volumes: the PostgreSQL volume will be deleted)"
-  docker compose down --volumes
+  log "  (--volumes: the PostgreSQL and observability volumes will be deleted)"
+  docker compose --profile observability down --volumes
 else
-  docker compose down
+  docker compose --profile observability down
 fi
 
 if [[ "${DELETE_CLUSTER}" == "1" ]]; then

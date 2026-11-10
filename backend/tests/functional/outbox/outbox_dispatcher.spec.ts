@@ -7,6 +7,11 @@ import RunDispatchService from '#modules/load_testing/services/run_dispatch_serv
 import { OutboxEventType } from '#modules/outbox/domain/events';
 import OutboxEvent from '#modules/outbox/models/outbox_event';
 import { OutboxDispatcher } from '#modules/outbox/services/outbox_dispatcher';
+import type {
+  DispatchOutcome,
+  DispatchResult,
+  OutboxTelemetry,
+} from '#modules/outbox/services/outbox_telemetry';
 import { type RunnerJob, TestRunQueue } from '#modules/runner/test_run_queue';
 import { makeValidNewTestCaseInput } from '#tests/fixtures/test_case_fixtures';
 import { createUser } from '#tests/helpers/factories';
@@ -22,10 +27,29 @@ class FakeQueue extends TestRunQueue {
   }
 }
 
-async function dispatcherWith(queue: FakeQueue) {
+class FakeTelemetry implements OutboxTelemetry {
+  dispatches: { type: string; result: DispatchResult; error?: string }[] = [];
+
+  async observeDispatch(
+    event: OutboxEvent,
+    dispatch: () => Promise<DispatchOutcome>,
+  ) {
+    const { result, error } = await dispatch();
+    this.dispatches.push({ type: event.type, result, error });
+  }
+
+  recordCycle() {}
+
+  async publishBaseline() {}
+}
+
+async function dispatcherWith(
+  queue: FakeQueue,
+  telemetry: OutboxTelemetry = new FakeTelemetry(),
+) {
   app.container.swap(TestRunQueue, () => queue);
   const runs = await app.container.make(RunDispatchService);
-  return new OutboxDispatcher().on(
+  return new OutboxDispatcher(telemetry).on(
     OutboxEventType.TEST_RUN_REQUESTED,
     (payload) => runs.dispatch(payload),
   );
@@ -106,5 +130,51 @@ test.group('outbox / dispatcher', (group) => {
       stored.lastError,
       'Unsupported outbox event type: something.else',
     );
+  });
+
+  test('reports each dispatch outcome to telemetry', async ({
+    client,
+    assert,
+  }) => {
+    const user = await createUser();
+    const input = makeValidNewTestCaseInput({ ownerId: user.id });
+    await client.post('/api/test-cases').json(input).loginAs(user);
+
+    const telemetry = new FakeTelemetry();
+    const failing = new FakeQueue();
+    failing.failWith = new Error('cluster unreachable');
+    await (await dispatcherWith(failing, telemetry)).dispatchPending();
+
+    // Make the retried event due again, then let it succeed.
+    await OutboxEvent.query().update({ nextAttemptAt: DateTime.now() });
+    await (await dispatcherWith(new FakeQueue(), telemetry)).dispatchPending();
+
+    await OutboxEvent.create({
+      type: 'something.else',
+      aggregateId: '0192f1d2-0000-7000-8000-000000000000',
+      payload: {},
+      status: 'PENDING' as never,
+      attempts: 0,
+      nextAttemptAt: DateTime.now().minus({ seconds: 1 }),
+    });
+    await (await dispatcherWith(new FakeQueue(), telemetry)).dispatchPending();
+
+    assert.deepEqual(telemetry.dispatches, [
+      {
+        type: OutboxEventType.TEST_RUN_REQUESTED,
+        result: 'retried',
+        error: 'cluster unreachable',
+      },
+      {
+        type: OutboxEventType.TEST_RUN_REQUESTED,
+        result: 'published',
+        error: undefined,
+      },
+      {
+        type: 'something.else',
+        result: 'failed',
+        error: 'Unsupported outbox event type: something.else',
+      },
+    ]);
   });
 });

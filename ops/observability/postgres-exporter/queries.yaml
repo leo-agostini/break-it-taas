@@ -1,0 +1,33 @@
+# Outbox backlog, read straight from the table so it is reported even when the
+# outbox worker is down. That is the failure OutboxBacklogAging exists to catch,
+# and the worker cannot report its own absence. The worker reports what it does
+# (dispatch outcomes, cycles) over OTLP instead.
+#
+# Exposed as breakit_outbox_events{status} and
+# breakit_outbox_oldest_age_seconds{status}. postgres-exporter marks custom
+# queries files as deprecated in favour of sql_exporter, but still supports
+# them as of v0.20; this is the one place to change if that ever goes away.
+breakit_outbox:
+  query: |
+    select
+      s.status,
+      count(e.id) as events,
+      -- Age only means something for events still waiting to be dispatched.
+      case
+        when s.status in ('PENDING', 'PROCESSING')
+          then coalesce(extract(epoch from now() - min(e.created_at)), 0)
+        else 0
+      end as oldest_age_seconds
+    from (values ('PENDING'), ('PROCESSING'), ('PUBLISHED'), ('FAILED')) as s(status)
+    left join outbox_events e on e.status = s.status
+    group by s.status
+  metrics:
+    - status:
+        usage: LABEL
+        description: Outbox event status
+    - events:
+        usage: GAUGE
+        description: Outbox events in this status
+    - oldest_age_seconds:
+        usage: GAUGE
+        description: Age of the oldest PENDING or PROCESSING event, 0 for other statuses or when there is none

@@ -32,6 +32,13 @@ datasources:
           matcherRegex: '"trace_id":"(\w+)"'
           url: '${__value.raw}'
           datasourceUid: tempo
+        # Logs that arrive over OTLP (the outbox worker) keep the line as the
+        # bare message and carry trace_id as structured metadata instead.
+        - name: Trace
+          matcherType: label
+          matcherRegex: trace_id
+          url: '${__value.raw}'
+          datasourceUid: tempo
         - name: RequestID
           matcherRegex: '"request_id":"([\w.-]+)"'
           url: '$${__value.raw}'

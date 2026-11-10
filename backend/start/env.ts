@@ -55,4 +55,13 @@ export default await Env.create(new URL('../', import.meta.url), {
   // silently dispatched Jobs to whatever kubectl's current-context happened to
   // be. KubernetesJobClient fails loudly instead.
   KUBERNETES_CONTEXT: Env.schema.string.optional(),
+
+  // OpenTelemetry (config/otel.ts). OTEL_SDK_DISABLED is deliberately absent:
+  // the SDK reads it from the process env before this file is ever loaded.
+  OTEL_EXPORTER_OTLP_ENDPOINT: Env.schema.string.optional(),
+  // Set by bin/console.ts for the outbox worker; the API keeps APP_NAME.
+  OTEL_SERVICE_NAME: Env.schema.string.optional(),
+  // Export logs over OTLP (config/logger.ts), for processes whose stdout
+  // nothing collects: the outbox worker on the host.
+  OTEL_EXPORT_LOGS: Env.schema.boolean.optional(),
 });

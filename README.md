@@ -91,6 +91,35 @@ Ctrl-C stops the worker and leaves everything else up. To tear down:
 Pass `SKIP_WORKER=1` if you want the stack without the worker attached — useful
 when you would rather run it from your editor or a debugger.
 
+### Observability (opt-in)
+
+```bash
+OBSERVABILITY=1 ./ops/dev-up.sh   # or: make up-obs
+```
+
+This adds Grafana (`http://localhost:3002`, `admin`/`admin`), Prometheus,
+Loki, Tempo, Alloy and kube-state-metrics, turns on the API's OpenTelemetry
+SDK, and builds the frontend with Grafana Faro. The **Break It TaaS** folder in
+Grafana has five dashboards:
+
+- **Services Overview:** API requests in the last minute, errors and error
+  rate, latency, and CPU/memory/disk/network per container, plus PostgreSQL and
+  logs.
+- **Test Runners:** active, pending, succeeded and failed runner containers,
+  their resources and their logs.
+- **Frontend:** sessions, page views, exceptions, console and API errors, and
+  Core Web Vitals.
+- **Outbox Worker:** whether the worker is up, the outbox backlog and the age
+  of its oldest event (read from PostgreSQL, so it stays right while the
+  worker is down), dispatch outcomes and durations, the worker's Node.js
+  runtime, and its logs.
+- **Logs Explorer:** every log source in one place.
+
+The cluster is read from outside with a read-only ServiceAccount, so it still
+runs only runner Jobs. See
+[ADR-009](docs/03-decisions/ADR-009-observability-collected-outside-cluster.md)
+and [docs/05-operations/observability.md](docs/05-operations/observability.md).
+
 ### Where each piece runs
 
 | Piece | Runs in | Reachable at |
@@ -204,7 +233,8 @@ It builds from the repo root, because `frontend/Dockerfile` copies `tsconfig.bas
 
 | Script | Purpose | When to run | Important prerequisites |
 | --- | --- | --- | --- |
-| `ops/dev-up.sh` | Starts the cluster, builds/loads the runner image, brings up the Compose stack, and runs the outbox worker in the foreground. | The normal way to start working (`make up`). | Docker, kind, kubectl, Node 24. Set `SKIP_WORKER=1` to skip the worker. |
+| `ops/dev-up.sh` | Starts the cluster, builds/loads the runner image, brings up the Compose stack, and runs the outbox worker in the foreground. | The normal way to start working (`make up`). | Docker, kind, kubectl, Node 24. Set `SKIP_WORKER=1` to skip the worker, `OBSERVABILITY=1` to add the observability stack (`make up-obs`). |
+| `ops/observability/write-kubeconfig.sh` | Applies the read-only `telemetry-reader` ServiceAccount and writes its kubeconfig to `ops/observability/.kube/` for Alloy and kube-state-metrics. | Called by `dev-up.sh` with `OBSERVABILITY=1`; rerun after recreating the cluster. | Cluster running. |
 | `ops/dev-down.sh` | Stops the Compose stack. `--cluster` also deletes the cluster, `--volumes` also drops the database volume. | Teardown (`make down` / `make down-all`). | Docker. |
 | `ops/smoke-test.sh` | End-to-end check: submits a test run and asserts a result reaches PostgreSQL. | After `dev-up.sh`, for one pass/fail signal. | The full stack running, worker included. |
 | `ops/lib.sh` | Shared defaults and helpers, including the kind host-gateway lookup. | Sourced by the other ops scripts. | Set `WORKLOAD_CONTEXT`, `WORKLOAD_CLUSTER_NAME`, or `APP_NAMESPACE` to override defaults. |
@@ -336,6 +366,7 @@ Useful references:
 - `docs/03-decisions/ADR-005-kind-over-k3d-for-local-cluster.md`
 - `docs/05-operations/kubernetes-basics.md`
 - `docs/05-operations/load-testing-study-guide.md`
+- `docs/05-operations/observability.md`
 - `backend/docs/outbox-worker-spec.md`
 
 AI agent instructions (Claude Code and others) live in `CLAUDE.md` at the repo root, which references the project skills in `.claude/skills/`.

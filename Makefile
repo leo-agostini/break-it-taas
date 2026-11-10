@@ -1,11 +1,15 @@
 # Thin wrappers over the ops/ scripts. Every target loads root .env through
 # ops/run-with-env.sh so the cluster name and context are the same for everyone.
 
-.PHONY: up down down-all smoke cluster-up cluster-down
+.PHONY: up up-obs down down-all smoke cluster-up cluster-down
 
 ## Start everything (Compose stack + kind cluster) and run the worker here
 up:
 	bash ops/run-with-env.sh bash ops/dev-up.sh
+
+## Same as `up`, plus Grafana/Prometheus/Loki/Tempo and API + browser telemetry
+up-obs:
+	OBSERVABILITY=1 bash ops/run-with-env.sh bash ops/dev-up.sh
 
 ## Stop the Compose stack, leave the cluster running
 down:

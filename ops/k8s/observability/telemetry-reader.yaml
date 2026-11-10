@@ -1,0 +1,50 @@
+# Read-only identity for the observability stack, which runs in Docker Compose
+# and reads the cluster from outside (see ADR-009). Nothing here runs in the
+# cluster: kube-state-metrics and Alloy authenticate with this ServiceAccount's
+# token over the API server, so the cluster keeps running only runner Jobs.
+#
+# Applied by ops/observability/write-kubeconfig.sh, which also exports the token
+# and CA into ops/observability/.kube/ for the Compose containers to mount.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: telemetry-reader
+  namespace: kube-system
+---
+# A long-lived token Secret, so the exported kubeconfig keeps working across
+# restarts instead of expiring like a projected `kubectl create token` one.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: telemetry-reader-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: telemetry-reader
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: telemetry-reader
+rules:
+  # nodes/proxy is how Alloy reaches each kubelet's cAdvisor endpoint through
+  # the API server; the kubelets themselves are not reachable from Compose.
+  - apiGroups: [""]
+    resources: ["nodes", "nodes/proxy", "nodes/metrics", "pods", "pods/log", "namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: telemetry-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: telemetry-reader
+subjects:
+  - kind: ServiceAccount
+    name: telemetry-reader
+    namespace: kube-system
