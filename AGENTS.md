@@ -41,7 +41,7 @@ Run from the repo root unless noted:
 
 ## Skills
 
-This repo ships project skills in [.Codex/skills/](.Codex/skills/) (one directory per skill, each with a `SKILL.md`) and mirrors them for OpenCode in `.opencode/skills/`. Codex auto-discovers `.Codex/skills/*/SKILL.md` — invoke the matching skill via the `Skill` tool instead of improvising a workflow when a task matches one of these:
+This repo ships project skills in [.agents/skills/](.agents/skills/) (one directory per skill, each with a `SKILL.md`) and mirrors them for Claude Code in [.claude/skills/](.claude/skills/) — keep both copies in sync. Codex auto-discovers `.agents/skills/*/SKILL.md` — use the matching skill instead of improvising a workflow when a task matches one of these:
 
 | Situation | Skill |
 |---|---|
@@ -71,14 +71,10 @@ Do not partially apply a skill's workflow — follow it through, or skip it if i
 
 ## Subagents
 
-Defined in [.Codex/agents/](.Codex/agents/), mirrored for OpenCode in `.opencode/agents/`:
+Defined in [.codex/agents/](.codex/agents/), mirrored for Claude Code in [.claude/agents/](.claude/agents/):
 
 - `code-reviewer` — correctness, readability, architecture, security, performance review before merge.
 - `security-auditor` — vulnerability detection, threat modeling, hardening.
 - `test-engineer` — test strategy, test writing, coverage analysis.
 
 These are personas invoked by the user or by a slash command; they don't invoke each other. The one multi-agent pattern in this repo is parallel fan-out with a merge step (e.g. running the three agents above concurrently and synthesizing their reports) — don't build a "router" persona that decides which other persona to call.
-
-## AI-facing resources
-
-- [docs/ai/prompts/](docs/ai/prompts/) — reusable prompts for external AI tools (architecture/sequence diagram generation, v0 frontend scaffolding). These are inputs to *other* tools, not instructions for Codex.

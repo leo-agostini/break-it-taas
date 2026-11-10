@@ -25,17 +25,11 @@ Use Chrome DevTools MCP to give your agent eyes into the browser. This bridges t
 
 ### Installation
 
-```bash
-# Add Chrome DevTools MCP server to your Codex config
-# In your project's .mcp.json or Codex settings:
-{
-  "mcpServers": {
-    "chrome-devtools": {
-      "command": "npx",
-      "args": ["@anthropic/chrome-devtools-mcp@latest"]
-    }
-  }
-}
+```toml
+# Add Chrome DevTools MCP server to your Codex config (~/.codex/config.toml):
+[mcp_servers.chrome-devtools]
+command = "npx"
+args = ["@anthropic/chrome-devtools-mcp@latest"]
 ```
 
 ### Available Tools
