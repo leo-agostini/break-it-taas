@@ -1,4 +1,4 @@
-import type { TestType } from '@/features/test-cases/types/test-case';
+import type { LoadMode, TestType } from '@/features/test-cases/types/test-case';
 import type { TestRunStatus } from '@/features/test-cases/types/test-run';
 
 export const runStatusStyles: Record<
@@ -79,17 +79,24 @@ export function hasActiveRun(runs?: Array<{ status: TestRunStatus }>): boolean {
   return runs?.some(isRunActive) ?? false;
 }
 
-export const loadModesByTestType: Record<
-  TestType,
-  Array<'CONSTANT' | 'RAMP'>
-> = {
-  SMOKE: ['CONSTANT'],
-  SOAK: ['CONSTANT'],
-  SPIKE: ['RAMP'],
+/**
+ * Mirrors backend load_profile_compatibility: each type allows the rate mode
+ * and the VU mode of the same shape, except BREAKPOINT, whose result is the
+ * arrival rate the target broke at — something a VU-driven run cannot measure.
+ */
+export const loadModesByTestType: Record<TestType, LoadMode[]> = {
+  SMOKE: ['CONSTANT', 'CONSTANT_VUS'],
+  SOAK: ['CONSTANT', 'CONSTANT_VUS'],
+  SPIKE: ['RAMP', 'RAMPING_VUS'],
   BREAKPOINT: ['RAMP'],
-  AVG_LOAD: ['CONSTANT', 'RAMP'],
-  STRESS: ['CONSTANT', 'RAMP'],
+  AVG_LOAD: ['CONSTANT', 'RAMP', 'CONSTANT_VUS', 'RAMPING_VUS'],
+  STRESS: ['CONSTANT', 'RAMP', 'CONSTANT_VUS', 'RAMPING_VUS'],
 };
+
+/** Whether a test type can be driven by virtual users at all. */
+export function supportsVuLoad(testType: TestType): boolean {
+  return testType !== 'BREAKPOINT';
+}
 
 /**
  * What each test type's derived load profile looks like, per the k6 test-types
@@ -98,12 +105,12 @@ export const loadModesByTestType: Record<
  */
 export const testTypeShapes: Record<TestType, string> = {
   SMOKE:
-    'Holds a low constant rate for the whole run to prove the script works.',
+    'Holds a low constant load for the whole run to prove the script works.',
   AVG_LOAD:
     'Ramps to the peak over 10% of the run, holds it for 80%, then ramps down.',
   STRESS:
     'Ramps to the peak over 20% of the run, holds it for 70%, then ramps down.',
-  SOAK: 'Holds the rate steady for the whole (long) run to expose slow leaks.',
+  SOAK: 'Holds the load steady for the whole (long) run to expose slow leaks.',
   SPIKE: 'Ramps hard to the peak and comes straight back down — no plateau.',
   BREAKPOINT:
     'Climbs continuously toward the peak and aborts the moment a threshold breaks, reporting the rate it reached.',

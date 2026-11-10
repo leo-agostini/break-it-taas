@@ -13,6 +13,12 @@ import {
   formatRps,
   shortId,
 } from '@/features/test-cases/lib/format';
+import {
+  describeExecutionPolicy,
+  describeLoadProfile,
+  isRateMode,
+  loadModeLabels,
+} from '@/features/test-cases/lib/load-profile';
 import type {
   TestRun,
   TestRunReport,
@@ -96,6 +102,19 @@ export function RunReport({
         </dl>
       </header>
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <MetricCard
+          label="Load"
+          value={loadModeLabels[run.loadProfile.mode]}
+          hint={describeLoadProfile(run.loadProfile)}
+        />
+        <MetricCard
+          label="Runner"
+          value={run.executionPolicy.resourceProfile}
+          hint={describeExecutionPolicy(run.executionPolicy)}
+        />
+      </div>
+
       {!report ? (
         <Empty
           icon={<Hourglass className="h-5 w-5" aria-hidden="true" />}
@@ -109,10 +128,22 @@ export function RunReport({
               label="Achieved RPS"
               value={formatRps(report.achieved.rps)}
             />
+            {isRateMode(run.loadProfile.mode) ? (
+              <MetricCard
+                label="Requested rate"
+                value={formatNumber(report.requested.rate)}
+                hint={report.requested.timeUnit}
+              />
+            ) : (
+              <MetricCard
+                label="Requested VUs"
+                value={formatNumber(report.requested.vus)}
+              />
+            )}
             <MetricCard
-              label="Requested rate"
-              value={formatNumber(report.requested.rate)}
-              hint={report.requested.timeUnit}
+              label="Peak VUs"
+              value={formatNumber(report.achieved.peakVus)}
+              hint="Largest pool k6 ran with"
             />
             <MetricCard
               label="Total requests"

@@ -2,8 +2,13 @@ import { TestCaseDetail } from '@/features/test-cases/components/test-case-detai
 import { useCreateTestRun } from '@/features/test-cases/hooks/use-create-test-run';
 import { useTestCase } from '@/features/test-cases/hooks/use-test-case';
 import { useTestCaseRuns } from '@/features/test-cases/hooks/use-test-case-runs';
+import { toNewTestRunInput } from '@/features/test-cases/mappers/new-test-run-mapper';
+import type { RunConfigurationFormValues } from '@/features/test-cases/schemas/run-configuration-schema';
 import type { TestCase } from '@/features/test-cases/types/test-case';
-import type { TestCaseRunSummary } from '@/features/test-cases/types/test-run';
+import type {
+  NewTestRunInput,
+  TestCaseRunSummary,
+} from '@/features/test-cases/types/test-run';
 import { getApiErrorMessage } from '@/lib/api-error';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -24,6 +29,8 @@ export function TestCaseDetailContainer({
   const { createTestRun, isCreating } = useCreateTestRun(testCaseId);
 
   const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
+  const [isConfiguringRun, setIsConfiguringRun] = useState(false);
+  const [runConfigError, setRunConfigError] = useState<string | null>(null);
   // Latch on the first data arrival rather than on the first run that happens
   // to have metrics. Latching on "has metrics" meant a page opened while every
   // run was still queued would re-run this on each poll and overwrite whatever
@@ -53,13 +60,32 @@ export function TestCaseDetailContainer({
     );
   }
 
-  async function handleStartRun() {
+  async function startRun(override?: NewTestRunInput): Promise<boolean> {
     try {
-      await createTestRun();
+      await createTestRun(override);
       toast.success('Test run queued.');
       await mutate();
+      return true;
     } catch (error) {
-      toast.error(getApiErrorMessage(error, 'Could not start the test run.'));
+      const message = getApiErrorMessage(
+        error,
+        'Could not start the test run.',
+      );
+      toast.error(message);
+      if (override) setRunConfigError(message);
+      return false;
+    }
+  }
+
+  function handleOpenRunConfig(open: boolean) {
+    setRunConfigError(null);
+    setIsConfiguringRun(open);
+  }
+
+  async function handleStartConfiguredRun(values: RunConfigurationFormValues) {
+    setRunConfigError(null);
+    if (await startRun(toNewTestRunInput(values))) {
+      setIsConfiguringRun(false);
     }
   }
 
@@ -71,8 +97,14 @@ export function TestCaseDetailContainer({
       runs={runList}
       selectedRunIds={selectedRunIds}
       onToggleRun={handleToggleRun}
-      onStartRun={handleStartRun}
+      onStartRun={() => startRun()}
       isStartingRun={isCreating}
+      runConfig={{
+        open: isConfiguringRun,
+        onOpenChange: handleOpenRunConfig,
+        submitError: runConfigError,
+        onSubmit: handleStartConfiguredRun,
+      }}
     />
   );
 }

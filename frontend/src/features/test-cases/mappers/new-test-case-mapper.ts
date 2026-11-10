@@ -1,22 +1,16 @@
+import {
+  toExecutionPolicy,
+  toLoad,
+  toNumber,
+} from '@/features/test-cases/mappers/run-configuration-mapper';
 import type { NewTestCaseFormValues } from '@/features/test-cases/schemas/new-test-case-schema';
 import type {
   AuthStrategy,
-  LoadProfile,
   NewTestCaseInput,
   Step,
   StepCheck,
   TestCaseOwnerType,
 } from '@/features/test-cases/types/test-case';
-
-function toNumber(value?: string): number | undefined {
-  if (!value || value.trim() === '') return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function toRequiredNumber(value: string): number {
-  return Number(value);
-}
 
 function parseJsonObject(raw?: string): Record<string, unknown> | undefined {
   if (!raw || raw.trim() === '') return undefined;
@@ -70,31 +64,6 @@ function toAuthStrategy(auth: NewTestCaseFormValues['auth']): AuthStrategy {
   }
 }
 
-function toLoadProfile(values: NewTestCaseFormValues): LoadProfile {
-  if (values.loadMode === 'RAMP') {
-    return {
-      mode: 'RAMP',
-      config: {
-        initialRate: toRequiredNumber(values.ramp.initialRate),
-        timeUnit: values.ramp.timeUnit,
-        stages: values.ramp.stages.map((stage) => ({
-          target: toRequiredNumber(stage.target),
-          duration: toRequiredNumber(stage.duration),
-        })),
-      },
-    };
-  }
-
-  return {
-    mode: 'CONSTANT',
-    config: {
-      targetRate: toRequiredNumber(values.constant.targetRate),
-      duration: toRequiredNumber(values.constant.duration),
-      timeUnit: values.constant.timeUnit,
-    },
-  };
-}
-
 function toStepCheck(
   check: NewTestCaseFormValues['steps'][number]['checks'][number],
 ): StepCheck {
@@ -127,8 +96,6 @@ export function toNewTestCaseInput(
   values: NewTestCaseFormValues,
   owner: { ownerType: TestCaseOwnerType; ownerId: string },
 ): NewTestCaseInput {
-  const isCustomProfile = values.execution.resourceProfile === 'CUSTOM';
-
   return {
     name: values.name,
     description: values.description?.trim() ? values.description : undefined,
@@ -140,15 +107,7 @@ export function toNewTestCaseInput(
       environment: values.environment,
     },
     authStrategy: toAuthStrategy(values.auth),
-    ...(values.loadSource === 'PRESET'
-      ? {
-          loadPreset: {
-            peakRate: toRequiredNumber(values.preset.peakRate),
-            duration: toRequiredNumber(values.preset.duration),
-            timeUnit: values.preset.timeUnit,
-          },
-        }
-      : { loadProfile: toLoadProfile(values) }),
+    ...toLoad(values),
     thresholdPolicy: {
       maxErrorRate: toNumber(values.thresholds.maxErrorRate),
       minCheckSuccessRate: toNumber(values.thresholds.minCheckSuccessRate),
@@ -157,14 +116,9 @@ export function toNewTestCaseInput(
       abortOnFail: values.thresholds.abortOnFail,
     },
     executionPolicy: {
+      ...toExecutionPolicy(values.execution),
       resourceProfile: values.execution.resourceProfile,
-      timeoutSeconds: toRequiredNumber(values.execution.timeoutSeconds),
-      cpuMillicores: isCustomProfile
-        ? toNumber(values.execution.cpuMillicores)
-        : undefined,
-      memoryMb: isCustomProfile
-        ? toNumber(values.execution.memoryMb)
-        : undefined,
+      timeoutSeconds: Number(values.execution.timeoutSeconds),
     },
     steps: toSteps(values),
   };

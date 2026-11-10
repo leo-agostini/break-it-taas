@@ -14,17 +14,23 @@ import {
   ChartTooltipContent,
 } from '@/components/ui/chart';
 import { shortId } from '@/features/test-cases/lib/format';
+import { describeLoadProfile } from '@/features/test-cases/lib/load-profile';
 import type { TestCaseRunSummary } from '@/features/test-cases/types/test-run';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
 interface ComparisonRow {
   id: string;
   name: string;
+  /** The load the run executed with, so runs at different loads read apart. */
+  load: string;
   medianMs: number;
   p95Ms: number;
   p99Ms: number;
-  requestedRate: number;
+  // Absent rather than 0 when the run was not driven that way, so no bar shows.
+  requestedRate?: number;
   achievedRps: number;
+  requestedVus?: number;
+  peakVus?: number;
   successRate: number;
   failureRate: number;
   totalRequests: number;
@@ -40,11 +46,14 @@ function toRows(
     .map((run) => ({
       id: run.id,
       name: shortId(run.id),
+      load: describeLoadProfile(run.loadProfile),
       medianMs: run.metrics?.medianMs ?? 0,
       p95Ms: run.metrics?.p95Ms ?? 0,
       p99Ms: run.metrics?.p99Ms ?? 0,
-      requestedRate: run.metrics?.requestedRate ?? 0,
+      requestedRate: run.metrics?.requestedRate,
       achievedRps: run.metrics?.achievedRps ?? 0,
+      requestedVus: run.metrics?.requestedVus,
+      peakVus: run.metrics?.peakVus,
       successRate: (run.metrics?.successRate ?? 0) * 100,
       failureRate: (run.metrics?.failureRate ?? 0) * 100,
       totalRequests: run.metrics?.totalRequests ?? 0,
@@ -102,6 +111,21 @@ function ChartCard({
             <ChartTooltip
               content={
                 <ChartTooltipContent
+                  labelFormatter={(label, payload) => {
+                    const row = payload[0]?.payload as
+                      | ComparisonRow
+                      | undefined;
+                    return (
+                      <div>
+                        <div className="font-mono">{String(label)}</div>
+                        {row ? (
+                          <div className="font-normal text-muted-foreground">
+                            {row.load}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  }}
                   formatter={(value, name) => (
                     <div className="flex w-full justify-between gap-3">
                       <span className="text-muted-foreground">
@@ -146,6 +170,11 @@ const throughputConfig: ChartConfig = {
   achievedRps: { label: 'Achieved', color: 'var(--chart-1)' },
 };
 
+const vusConfig: ChartConfig = {
+  requestedVus: { label: 'Requested', color: 'var(--chart-2)' },
+  peakVus: { label: 'Peak', color: 'var(--chart-1)' },
+};
+
 const outcomeConfig: ChartConfig = {
   successRate: { label: 'Success', color: 'var(--chart-3)' },
   failureRate: { label: 'Failure', color: 'var(--chart-4)' },
@@ -187,12 +216,21 @@ export function MetricsComparison({
       />
       <ChartCard
         title="Throughput vs requested"
-        description="A gap means the generator could not keep up."
+        description="For rate-driven runs, a gap means the generator could not keep up."
         config={throughputConfig}
         rows={rows}
         bars={['requestedRate', 'achievedRps']}
         unit="rps"
       />
+      {rows.some((row) => row.peakVus !== undefined) ? (
+        <ChartCard
+          title="Virtual users"
+          description="VUs a VU-driven run asked for against the largest pool k6 ran with."
+          config={vusConfig}
+          rows={rows}
+          bars={['requestedVus', 'peakVus']}
+        />
+      ) : null}
       <ChartCard
         title="Success vs failure rate"
         description="Share of requests that passed or failed."

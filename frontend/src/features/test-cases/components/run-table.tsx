@@ -24,9 +24,34 @@ import {
   formatRps,
   shortId,
 } from '@/features/test-cases/lib/format';
+import {
+  describeLoadPeak,
+  describeLoadProfile,
+  loadModeLabels,
+} from '@/features/test-cases/lib/load-profile';
 import type { TestCaseRunSummary } from '@/features/test-cases/types/test-run';
 import { Activity } from 'lucide-react';
 import { Link } from 'react-router';
+
+/** Each run stores the load it ran with, which may differ from the default. */
+function LoadCell({ run }: { run: TestCaseRunSummary }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="cursor-default tabular-nums">
+            {describeLoadPeak(run.loadProfile)}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          {loadModeLabels[run.loadProfile.mode]}:{' '}
+          {describeLoadProfile(run.loadProfile)} ·{' '}
+          {run.executionPolicy.resourceProfile} runner
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
 function WarningChips({ run }: { run: TestCaseRunSummary }) {
   if (!run.metrics) return null;
@@ -97,6 +122,7 @@ export function RunTable({
             <TableHead className="w-10" />
             <TableHead>Run</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead className="hidden sm:table-cell">Load</TableHead>
             <TableHead className="hidden md:table-cell">Started</TableHead>
             <TableHead className="hidden lg:table-cell">Duration</TableHead>
             <TableHead className="text-right">p95</TableHead>
@@ -135,6 +161,9 @@ export function RunTable({
               </TableCell>
               <TableCell>
                 <RunStatusBadge status={run.status} />
+              </TableCell>
+              <TableCell className="hidden text-sm sm:table-cell">
+                <LoadCell run={run} />
               </TableCell>
               <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
                 {formatDateTime(run.startedAt)}
