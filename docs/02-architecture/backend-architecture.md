@@ -1,109 +1,142 @@
 # Arquitetura do Backend
 
-> Este documento descreve a arquitetura **já implementada** em `backend/src`, extraída a partir do código-fonte (não é uma proposta). Serve como referência para agentes de IA e novos contribuidores.
+> Este documento descreve a arquitetura **já implementada** em `backend/`, extraída a partir do código-fonte (não é uma proposta). Serve como referência para agentes de IA e novos contribuidores. A decisão e as alternativas estão no [ADR-007](../03-decisions/ADR-007-adonis-modular-monolith.md).
 
 ## Visão geral
 
-O backend segue **Clean Architecture / Ports & Adapters**, com três camadas e uma regra de dependência estrita: `infra` depende de `application`, `application` depende de `domain`, e **`domain` não depende de nada**. Nenhuma camada interna conhece uma camada externa.
+O backend é um **monólito modular MVC em AdonisJS v7** (Node.js 24). O código é dividido por **módulo de negócio**, não por camada técnica; dentro de cada módulo há controllers, models, services e validators no estilo Adonis, e uma pasta `domain/` com as regras de negócio em TypeScript puro.
 
 ```
-backend/src/
-  domain/        # regras de negócio puras, sem I/O, sem HTTP, sem framework
-  application/   # casos de uso, orquestração, portas (interfaces)
-  infra/         # adaptadores concretos: HTTP (Elysia), DB (Knex), fila (k8s), config
-  tests/         # espelha a estrutura acima
+backend/
+  adonisrc.ts            providers, preloads, suites de teste
+  start/env.ts           schema validado de variáveis de ambiente (fonte única de configuração)
+  start/kernel.ts        pilhas de middleware (cors, bodyparser, sessão, auth)
+  start/routes.ts        apenas importa o routes.ts de cada módulo
+  config/                app, database (pg), session, auth, cors, hash (argon2), bodyparser
+  providers/app_provider.ts   liga portas a implementações (TestRunQueue → Kubernetes)
+  commands/              comandos Ace: outbox:work (worker), db:adopt-knex
+  database/migrations/   migrations Lucid
+  app/
+    exceptions/handler.ts     converte qualquer exceção em resposta HTTP
+    middleware/               auth, force JSON, bindings do container
+    modules/
+      shared/        domain/ (erros, tipos, ids), http/ (mapeamento de erros, actor, serialização), health
+      identity/      usuários, organizações, sessão
+      load_testing/  test cases, test runs, resultados, métricas, callback do runner
+      runner/        adaptador Kubernetes + porta TestRunQueue + assinatura HMAC
+      outbox/        outbox transacional
+  tests/{unit,functional,integration}/
 ```
 
-Runtime: **Bun**. Framework HTTP: **Elysia**. Banco: **PostgreSQL** via **Knex** (query builder + migrations, sem ORM). Fila de execução: **Kubernetes Jobs** via client oficial. Autenticação: **JWT** (access + refresh) com cookies httpOnly.
+Banco: **PostgreSQL** via **Lucid**. Fila de execução: **Kubernetes Jobs** via client oficial. Autenticação: **sessão do Adonis** em cookie `httpOnly` ([ADR-008](../03-decisions/ADR-008-session-auth.md)). Testes: **Japa**.
 
-Há dois processos de entrada, ambos lendo do mesmo `domain`/`application`:
+Há dois processos de entrada, ambos sobre o mesmo código:
 
-- `src/index.ts` — servidor HTTP Elysia (API pública, protegida e interna).
-- `src/worker.ts` — worker standalone que despacha eventos do outbox em polling (`OutboxDispatcherWorker`, intervalo de 5s), sem depender do processo HTTP.
+- `node bin/server.js` (dev: `node ace serve --hmr`) — servidor HTTP.
+- `node ace outbox:work` — worker que despacha eventos do outbox em polling (5 s, lotes de 50), sem depender do processo HTTP. Roda no host porque cria Jobs e precisa de kubeconfig ([ADR-006](../03-decisions/ADR-006-compose-first-local-environment.md)).
 
-## Camada `domain/`
+## Anatomia de um módulo
 
-Contém apenas regras de negócio, sem dependência de protocolo, framework ou infraestrutura.
+```
+modules/load_testing/
+  domain/        regras puras: value objects, políticas, ciclo de vida, projeções
+  models/        models Lucid (persistência + métodos que aplicam o domínio)
+  services/      operações do módulo; abrem transações, orquestram models e domínio
+  validators/    schemas VineJS (estrutura da requisição)
+  controllers/   finos: validam, chamam um serviço, devolvem um presenter
+  presenters/    montam o corpo de resposta campo a campo
+  routes.ts      as únicas URLs que o módulo conhece
+```
 
-- `entities/` — `User`, `Organization`, `TestCase`, `TestRun`, `OutboxEvent`. Entidades expõem métodos de transição de estado (ex.: `TestRun.create()`, `run.queue()`).
-- `vos/` (value objects) — `LoadProfile`, `Stage`, `Step`, `ThresholdPolicy`, `ExecutionPolicy`, `AuthStrategy`, `TargetSystem`. Modelam o teste de carga de forma **agnóstica de engine** (ver [ADR-002](../03-decisions/ADR-002-domain-model-independent-from-k6.md)): o mapeamento para k6 acontece só na borda de infraestrutura.
-- `errors/` — `BaseError` e erros customizados (`NotFoundError`, `AuthorizationError`, `ValidationError`, etc.) carregam apenas `code`, `message`, `description`, `help` — **sem `httpStatus`** (ver [ADR-003](../03-decisions/ADR-003-error-boundary-and-http-mapping.md)).
-- `events/` — payloads de domínio (`TestRunEvents`, `outbox-event-map.ts`) publicados via outbox.
-- `services/` — regras de domínio que não pertencem a uma única entidade (ex.: `load-profile-compatibility-policy.ts`, `password-hasher.ts`).
-
-Regra prática: se um arquivo em `domain/` precisar importar algo de `infra/` ou de uma lib HTTP, é sinal de vazamento de camada.
-
-## Camada `application/`
-
-Orquestra casos de uso combinando entidades de domínio com **portas** (interfaces) que a infraestrutura implementa.
-
-- `use-cases/` — um arquivo por caso de uso (`CreateNewTestRunUseCase`, `CompleteTestRunFromCallbackUseCase`, `LoginUserUseCase`, etc.), cada um com um único método público `execute()`. Um caso de uso recebe repositórios/portas por **injeção de construtor** e não conhece Elysia, Knex ou Kubernetes — apenas as interfaces em `ports/` e `repositories/`.
-- `ports/` — interfaces que a infraestrutura implementa: `UnitOfWork` (transação), `TestRunQueue` (publicação de execução), `ActorContext` (identidade do usuário autenticado).
-- `repositories/` — interfaces de persistência (`TestCaseRepository`, `TestRunRepository`, `OutboxRepository`, `UserRepository`, `ResultRepository`, `TestRunMetricsRepository`). A implementação concreta (Knex) vive em `infra/db/repositories/`.
-- `services/` — serviços de aplicação que cruzam casos de uso, ex. `JwtAuthService`.
-- `validators/` — validação de entrada específica de caso de uso.
-- `projections/` — transformação de dados para leitura (ex.: `normalize-k6-result-metrics.ts` normaliza métricas cruas do k6 para o formato de relatório).
-- `errors/http-error-mapper.ts` — único ponto que traduz um erro de domínio para status HTTP. Ver `domain-boundaries.md`.
-- `workers/outbox-dispatcher-worker.ts` — lógica do worker (independente do loop de polling, que fica em `src/worker.ts`).
-
-Um caso de uso típico segue este formato (`create-new-test-run.ts`):
+Um fluxo típico (`POST /api/test-cases`):
 
 ```ts
-export class CreateNewTestRunUseCase {
-  constructor(
-    private unitOfWork: UnitOfWork,
-    private testCaseRepository: TestCaseRepository,
-    private testRunRepository: TestRunRepository,
-    private outboxRepository: OutboxRepository,
-  ) {}
+// controllers/test_cases_controller.ts
+async store(ctx: HttpContext) {
+  const payload = await ctx.request.validateUsing(createTestCaseValidator); // Vine: estrutura
+  const { testCase, run } = await this.testCases.create(payload, actorOf(ctx));
+  ctx.response.status(201);
+  return { testCaseId: testCase.id, testRunId: run.id };
+}
 
-  async execute(testCaseId: UUID, actor: ActorContext): Promise<TestRun> {
-    // 1. carrega e valida regras de domínio/autorização
-    // 2. abre uma transação via UnitOfWork
-    // 3. persiste a entidade + enfileira um OutboxEvent na MESMA transação
-    // 4. retorna a entidade de domínio (não um DTO HTTP)
-  }
+// services/test_case_service.ts
+async create(draft, actor) {
+  assertActorMayOwn(draft, actor);                       // domínio
+  const definition = buildTestCaseDefinition(draft);     // domínio: regras entre campos
+  return db.transaction(async (trx) => {
+    const testCase = TestCase.fromDefinition(definition);
+    testCase.useTransaction(trx);
+    await testCase.save();
+    const run = await this.runs.request(testCase.id, trx); // run QUEUED + evento no outbox, mesma transação
+    return { testCase, run };
+  });
 }
 ```
 
-O padrão **Transactional Outbox** (ver [ADR-001](../03-decisions/ADR-001-transactional-outbox.md)) garante que a mudança de estado e a publicação do evento nunca fiquem inconsistentes: ambas acontecem na mesma transação de banco; o `worker.ts` despacha os eventos pendentes de forma assíncrona.
+Serviços recebem dependências por **injeção de construtor** (`@inject()`), resolvidas pelo container do Adonis.
 
-## Camada `infra/`
+## O núcleo de domínio (`modules/*/domain/`)
 
-Implementações concretas das portas/interfaces definidas em `application/`.
+O que ficou isolado do framework, e por quê:
 
-- `http/` — adaptador Elysia:
-  - `container.ts` — **composition root**: instancia repositórios, serviços e casos de uso e monta o `AppContainer` (DI manual via construtor, sem framework de DI).
-  - `routes/` — `public-routes.ts`, `protected-routes.ts` (autenticação obrigatória via `authenticator.ts`), `internal-routes.ts` (callback do runner, autenticado por assinatura HMAC).
-  - `controllers/` — funções finas que recebem `AppContainer` e delegam para `execute()` do caso de uso; não contêm lógica de negócio.
-  - `middlewares/authenticator.ts` — extrai e valida JWT de header/cookie, produz `ActorContext`.
-  - `security/runner-callback-signature.ts` — valida HMAC do callback do runner k6 (ver [hmac-explained.md](hmac-explained.md)).
-- `db/` — adaptador Knex: `knex.ts` (conexão), `knex-unit-of-work.ts` (implementa `UnitOfWork`), `repositories/knex-*.ts` (implementam as interfaces de `application/repositories`), `migrations/`.
-- `k8s/kubernetes-job-client.ts` — cria/observa Jobs Kubernetes que executam o runner k6.
-- `queue/kubernetes-test-run-queue.ts` — implementa `TestRunQueue`, traduzindo uma `TestRun` de domínio em um Job Kubernetes.
-- `config/env.ts` — leitura e validação de variáveis de ambiente (fonte única de configuração).
+- **`load_testing/domain/vos/`** — `LoadProfile`, `Stage`, `Step`, `ThresholdPolicy`, `ExecutionPolicy`, `AuthStrategy`, `TargetSystem`. Modelam o teste de carga de forma **agnóstica de engine** ([ADR-002](../03-decisions/ADR-002-domain-model-independent-from-k6.md)); o mapeamento para k6 acontece só no runner.
+- **`load_testing/domain/test_case_definition.ts`** — `buildTestCaseDefinition` aplica as regras que envolvem vários campos: preset × perfil explícito, compatibilidade tipo de teste ↔ modo de carga, exigências do BREAKPOINT, timeout suficiente para a duração do perfil. `assertActorMayOwn` define quem pode ser dono de um test case.
+- **`load_testing/domain/test_run_status.ts`** — o ciclo de vida do `TestRun` como transições puras; o model `TestRun` só aplica o resultado e carimba timestamps.
+- **`load_testing/domain/k6_result_metrics.ts`** — normaliza o resumo cru do k6 em métricas de relatório.
+- **`outbox/domain/`** — catálogo de eventos e política de retry com backoff exponencial.
+- **`identity/domain/`** — política de senha e invariantes de perfil.
+- **`shared/domain/`** — `BaseError` e erros customizados (`NotFoundError`, `ValidationError`, ...), que carregam só `code`, `message`, `description`, `help` — **sem status HTTP** ([ADR-003](../03-decisions/ADR-003-error-boundary-and-http-mapping.md)).
 
-### Autenticação entre domínios independentes
+Regra prática: um arquivo em `domain/` não importa `@adonisjs/*`, models, services nem nada que faça I/O. Ele pode importar o `domain/` de outro módulo.
 
-`JwtAuthService` emite `access_token` (15 min) e `refresh_token` (7 dias) como cookies `httpOnly` (`infra/http/cookies.ts`); `authenticateRequest` (`infra/http/middlewares/authenticator.ts`) aceita tanto o cookie quanto um header `Authorization: Bearer`. Como o frontend é publicado num domínio público diferente do backend (sem ingress compartilhado unificando as duas origens), esses cookies precisam ser configurados para cross-site: `COOKIE_SAMESITE=None`, `COOKIE_SECURE=true` e `CORS_ORIGIN` fixado na origem real do frontend (nunca `*`, que só existe como conveniência de dev local — `index.ts` reflete o `Origin` da requisição apenas quando `CORS_ORIGIN` é deixado em `*`). `COOKIE_DOMAIN` permanece não definido, já que frontend e backend não compartilham um domínio pai. A decisão completa e o tradeoff aceito (Safari bloqueia cookies de terceiros por padrão) estão em [ADR-004](../03-decisions/ADR-004-cross-domain-httponly-cookie-auth.md).
+## Fronteiras entre módulos
+
+- Grafo de dependências, sem ciclos: `identity → shared`; `load_testing → outbox, runner, shared`; `outbox → shared`; `runner → shared`.
+- Um módulo usa outro **apenas** pelos seus `services/` ou `domain/` (e o `runner` pela porta `TestRunQueue`). Nunca importa models ou controllers de outro módulo.
+- `runner` define seus próprios tipos de entrada (`RunnerJob`), estruturais e em formato JSON, para não depender do domínio de `load_testing`.
+- `outbox` não sabe o que um evento significa: o comando `outbox:work` registra, para cada tipo, o handler do módulo consumidor (`test-run.requested` → `RunDispatchService` de `load_testing`).
+
+## Erros e HTTP
+
+`app/exceptions/handler.ts` delega para `#modules/shared/http/error_mapper`, **o único ponto** que transforma um erro em status HTTP. Erros de framework são dobrados no mesmo corpo `{ error: { code, message, description?, help? } }`:
+
+| Origem                                        | Status | `code`                  |
+|-----------------------------------------------|--------|-------------------------|
+| `ValidationError` / falha do VineJS           | 422    | `VALIDATION_ERROR`      |
+| `AuthenticationError` / sem sessão / login inválido | 401 | `AUTHENTICATION_ERROR` |
+| `AuthorizationError`                          | 403    | `AUTHORIZATION_ERROR`   |
+| `NotFoundError`                               | 404    | `NOT_FOUND`             |
+| `InvariantViolationError`                     | 409    | `INVARIANT_VIOLATION`   |
+| rota inexistente                              | 404    | corpo `{ status: 'not_found' }` |
+| qualquer outro                                | 500    | `INTERNAL_SERVER_ERROR` |
+
+Só respostas 5xx são registradas como erro no log.
+
+## Autenticação e o callback do runner
+
+- Rotas sob `/api/test-cases` e `/api/test-runs` usam `middleware.auth()` (session guard). `actorOf(ctx)` converte o usuário da sessão em `ActorContext` antes de chamar qualquer serviço.
+- `POST /api/internal/test-runs/callback` não usa sessão: é autenticado por **HMAC sobre os bytes exatos da requisição** (`request.raw()`, mantido pelo bodyparser), verificado antes de o corpo ser usado para qualquer coisa ([hmac-explained.md](hmac-explained.md)).
 
 ## Fluxo ponta a ponta: criação e execução de um `TestRun`
 
-1. Cliente autenticado chama `POST /api/test-runs/:testCaseId` (`protected-routes.ts`).
-2. `createTestRunController` delega para `CreateNewTestRunUseCase.execute()`.
-3. O caso de uso valida posse do `TestCase`, cria a entidade `TestRun` (`status: queued`) e um `OutboxEvent`, e persiste ambos na mesma transação (`UnitOfWork`).
-4. `OutboxDispatcherWorker` (processo `worker.ts`) faz polling do outbox, encontra o evento pendente e usa `KubernetesTestRunQueue.publish()` para criar um Job Kubernetes via `KubernetesJobClient`.
-5. O runner k6, ao terminar, chama o callback interno (`internal-routes.ts`), autenticado por HMAC.
-6. `CompleteTestRunFromCallbackUseCase` persiste o resultado, normaliza métricas (`normalize-k6-result-metrics.ts`) e atualiza o status do `TestRun`.
-7. O cliente consulta `GET /api/test-runs/:testRunId/report`, atendido por `GetTestRunReportUseCase`.
+1. Cliente autenticado chama `POST /api/test-runs/:testCaseId` (ou cria um test case, que já gera o primeiro run).
+2. `TestRunService` verifica a posse do test case, cria o `TestRun` (`QUEUED`) e grava um evento `test-run.requested` no outbox **na mesma transação** ([ADR-001](../03-decisions/ADR-001-transactional-outbox.md)).
+3. `outbox:work` reivindica eventos pendentes com `for update skip locked` e chama `RunDispatchService`, que publica o run via `TestRunQueue` (implementação `KubernetesTestRunQueue`) e marca o run como `RUNNING`. Falhas voltam para `PENDING` com backoff; após 8 tentativas o evento fica `FAILED`.
+4. O runner k6, ao terminar, chama o callback interno assinado.
+5. `RunCompletionService` conclui o run (callbacks repetidos são aceitos sem efeito), grava o resultado bruto e a projeção normalizada de métricas.
+6. O cliente consulta `GET /api/test-runs/:testRunId/report`.
 
-## Testes (`src/tests/`)
+## Testes (`backend/tests/`)
 
-A árvore de testes espelha `domain/`, `application/` (via `use-cases/`) e `infra/`. Casos de uso são testados com **repositórios in-memory** (`tests/mocks/in-memory-*-repository.ts`), o que só é possível porque os casos de uso dependem de interfaces, nunca de implementações Knex. Há um teste de integração (`tests/integration/test-run-cluster-flow.spec.ts`) que exercita o fluxo outbox → Kubernetes Job.
+- `unit/` — o núcleo de domínio e o adaptador `runner` (manifesto do Job, scheduling, HMAC, client k8s). Não usa banco.
+- `functional/` — requisições HTTP reais contra o servidor de teste e o Postgres num banco **`app_test`** separado (`.env.test`), criado e migrado automaticamente; tabelas truncadas entre testes. O dispatcher do outbox é testado com um `TestRunQueue` falso via `container.swap`.
+- `integration/` — fluxo completo contra o ambiente de `ops/dev-up.sh` (API → outbox → worker → Job no kind → callback). Só roda com `RUN_CLUSTER_INTEGRATION=1` (`npm run smoke`).
 
 ## Regras para novo código
 
-- Um caso de uso novo vai em `application/use-cases/`, recebe dependências por construtor (nunca instancia um repositório Knex diretamente) e não referencia Elysia.
-- Uma nova forma de persistência ou fila é uma nova implementação de uma interface existente em `application/ports/` ou `application/repositories/`, colocada em `infra/`.
-- Erros de negócio são lançados como subclasses de `BaseError` em `domain/errors/`; o mapeamento para HTTP é responsabilidade exclusiva de `application/errors/http-error-mapper.ts` — nunca `set.status` direto num caso de uso.
-- Toda mudança de estado que precisa disparar um efeito assíncrono (fila, notificação) usa o padrão outbox: persistir estado + evento na mesma transação, nunca side-effects "fire-and-forget" dentro do caso de uso.
+- Código novo entra no módulo dono do conceito. Se não há dono claro, discuta antes de criar um módulo.
+- Uma regra de negócio que pode ser expressa sem banco vai para `domain/`, com teste unitário; o model ou serviço a chama.
+- Controllers não contêm regras de negócio nem acessam models diretamente: validam, chamam um serviço e devolvem um presenter.
+- Erros de negócio são subclasses de `BaseError` em `shared/domain/errors.ts`; o mapeamento para HTTP é responsabilidade exclusiva do `error_mapper` — nunca `response.status()` para sinalizar erro dentro de um serviço.
+- Toda mudança de estado que precisa disparar um efeito assíncrono usa o outbox: `OutboxService.enqueue(evento, trx)` na transação da mudança, nunca side-effects "fire-and-forget".
+- Novas implementações de portas (ex.: outra fila de execução) são registradas em `providers/app_provider.ts`.

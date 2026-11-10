@@ -4,8 +4,11 @@ WORKDIR /app
 
 ARG VITE_API_URL=/api
 ARG VITE_API_SERVER_URL=http://backend.app.svc.cluster.local/api
+# Empty disables Faro browser telemetry (see frontend/src/lib/env.ts).
+ARG VITE_FARO_URL=
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_API_SERVER_URL=$VITE_API_SERVER_URL
+ENV VITE_FARO_URL=$VITE_FARO_URL
 
 COPY tsconfig.base.json /tsconfig.base.json
 COPY frontend/package.json ./

@@ -23,6 +23,16 @@ require_command() {
   command -v "$1" >/dev/null 2>&1 || die "'$1' is required but not installed or not on PATH."
 }
 
+# The backend (and its outbox worker) runs on AdonisJS v7, which needs Node 24.
+# `nvm use` in the repo root picks it up from .nvmrc.
+require_node_24() {
+  require_command node
+  local major
+  major="$(node -p 'process.versions.node.split(".")[0]')"
+  [[ "${major}" -ge 24 ]] ||
+    die "Node 24+ is required (found $(node --version)). Run: nvm install && nvm use"
+}
+
 # kubectl shorthand — always targets the workload cluster context explicitly,
 # never the ambient current-context
 kube() { kubectl --context "${WORKLOAD_CONTEXT}" "$@"; }

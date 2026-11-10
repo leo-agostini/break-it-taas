@@ -1,3 +1,9 @@
+import type {
+  ExecutionPolicy,
+  LoadPreset,
+  LoadProfile,
+} from '@/features/test-cases/types/test-case';
+
 export type TestRunStatus =
   | 'CREATED'
   | 'QUEUED'
@@ -15,13 +21,34 @@ export interface TestRun {
   startedAt?: string;
   completedAt?: string;
   runtimeRef?: string;
+  /** The load this run executed with; may differ from its test case default. */
+  loadProfile: LoadProfile;
+  /** The runner container this run executed on. */
+  executionPolicy: ExecutionPolicy;
+}
+
+/**
+ * Body of `POST /test-runs/:testCaseId`. Every field is optional: an empty
+ * body reruns the test case default. A new load replaces the default load;
+ * execution fields replace the default one by one, and an omitted timeout
+ * grows to fit a longer load.
+ */
+export interface NewTestRunInput {
+  loadProfile?: LoadProfile;
+  loadPreset?: LoadPreset;
+  executionPolicy?: Partial<ExecutionPolicy>;
 }
 
 export interface TestRunMetricsSummary {
+  /** Peak arrival rate a rate-driven run asked for. */
   requestedRate?: number;
   requestedTimeUnit?: string;
   requestedDurationSeconds?: number;
+  /** Peak VU count a VU-driven run asked for. */
+  requestedVus?: number;
   achievedRps?: number;
+  /** Largest VU pool k6 actually ran with. */
+  peakVus?: number;
   totalRequests?: number;
   droppedIterations?: number;
   failureRate?: number;
@@ -48,9 +75,11 @@ export interface TestRunReport {
     rate?: number;
     timeUnit?: string;
     durationSeconds?: number;
+    vus?: number;
   };
   achieved: {
     rps?: number;
+    peakVus?: number;
     totalRequests?: number;
     droppedIterations?: number;
     failureRate?: number;

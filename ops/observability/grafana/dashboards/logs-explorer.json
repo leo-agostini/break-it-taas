@@ -1,29 +1,48 @@
 {
   "uid": "breakit-logs",
   "title": "Logs Explorer",
-  "tags": ["breakit", "logs"],
+  "tags": [
+    "breakit",
+    "logs"
+  ],
   "timezone": "browser",
   "refresh": "30s",
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "templating": {
     "list": [
       {
         "name": "service",
         "label": "Service",
         "type": "query",
-        "datasource": { "type": "loki", "uid": "loki" },
-        "query": { "label": "service_name", "refId": "svc", "type": 1 },
+        "datasource": {
+          "type": "loki",
+          "uid": "loki"
+        },
+        "query": {
+          "label": "service_name",
+          "refId": "svc",
+          "type": 1
+        },
         "refresh": 2,
         "includeAll": true,
         "multi": true,
-        "current": { "text": "All", "value": "$__all" }
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        }
       },
       {
         "name": "search",
         "label": "Search",
         "type": "textbox",
         "query": "",
-        "current": { "text": "", "value": "" }
+        "current": {
+          "text": "",
+          "value": ""
+        }
       }
     ]
   },
@@ -31,26 +50,52 @@
     {
       "type": "timeseries",
       "title": "Log volume by level",
-      "datasource": { "type": "loki", "uid": "loki" },
-      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "fieldConfig": {
-        "defaults": { "unit": "none", "custom": { "fillOpacity": 30, "showPoints": "never", "stacking": { "mode": "normal" } } },
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "fillOpacity": 30,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
         "overrides": []
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (level) (count_over_time({job=\"docker\"} |= \"$search\" [1m]))",
-          "legendFormat": "{{level}}"
+          "expr": "sum by (detected_level) (count_over_time({service_name=~\"$service\"} |= \"$search\" [$__auto]))",
+          "legendFormat": "{{detected_level}}"
         }
-      ]
+      ],
+      "description": "Every source: Compose containers, runner pods (source=\"kubernetes\") and the browser (source=\"faro\")."
     },
     {
       "type": "logs",
       "title": "All logs (click a line to jump to its trace)",
-      "description": "Compose containers arrive via Docker log tailing. The outbox worker runs on the host, outside Docker, so it ships logs over OTLP instead.",
-      "datasource": { "type": "loki", "uid": "loki" },
-      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 6 },
+      "description": "Compose containers arrive via Docker log tailing, runner pods via the Kubernetes API, and browser telemetry via Faro. The outbox worker runs on the host and is not collected.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
       "options": {
         "showTime": true,
         "wrapLogMessage": true,
@@ -68,8 +113,16 @@
     {
       "type": "logs",
       "title": "Errors only",
-      "datasource": { "type": "loki", "uid": "loki" },
-      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 22 },
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
       "options": {
         "showTime": true,
         "wrapLogMessage": true,
@@ -80,7 +133,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "{service_name=~\"$service\"} | level =~ \"error|fatal\""
+          "expr": "{service_name=~\"$service\"} | detected_level=~\"error|fatal|critical\""
         }
       ]
     }

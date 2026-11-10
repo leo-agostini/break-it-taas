@@ -1,4 +1,5 @@
 import type {
+  NewTestRunInput,
   TestCaseRunSummary,
   TestRun,
   TestRunReport,
@@ -42,10 +43,15 @@ export async function getTestRunReport(
   }
 }
 
+// An empty override reruns the test case at its default configuration.
 export async function createTestRun(
   testCaseId: string,
+  override: NewTestRunInput = {},
   client: AxiosInstance = privateHttpClient,
 ): Promise<TestRun> {
-  const response = await client.post<TestRun>(`/test-runs/${testCaseId}`);
+  const response = await client.post<TestRun>(
+    `/test-runs/${testCaseId}`,
+    override,
+  );
   return response.data;
 }

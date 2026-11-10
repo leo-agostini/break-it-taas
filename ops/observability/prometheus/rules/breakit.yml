@@ -6,8 +6,10 @@ groups:
       # The outbox is the heart of the dispatch pipeline. If events age without
       # being published, test runs silently never start — the exact failure the
       # worker was previously unable to report at all.
+      # Read from the table by postgres-exporter, so it fires even when the
+      # worker is down.
       - alert: OutboxBacklogAging
-        expr: breakit_outbox_oldest_pending_age_seconds > 120
+        expr: max(breakit_outbox_oldest_age_seconds{status=~"PENDING|PROCESSING"}) > 120
         for: 2m
         labels:
           severity: warning
@@ -49,8 +51,10 @@ groups:
     rules:
       # If the collector is down every other alert here goes quiet, so this one
       # guards the guard.
+      # Exporter components label their targets job="integrations/<name>",
+      # overriding the scrape's job_name, hence not job="alloy".
       - alert: AlloyDown
-        expr: up{job="alloy"} == 0
+        expr: up{job="integrations/self"} == 0
         for: 2m
         labels:
           severity: critical

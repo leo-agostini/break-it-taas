@@ -7,9 +7,13 @@ export type K6Scenario = {
   rate?: number;
   startRate?: number;
   duration?: string;
-  timeUnit: string;
-  preAllocatedVUs: number;
-  maxVUs: number;
+  /** Arrival-rate executors only. */
+  timeUnit?: string;
+  preAllocatedVUs?: number;
+  maxVUs?: number;
+  /** VU executors only. */
+  vus?: number;
+  startVUs?: number;
   stages?: Array<{ target: number; duration: string }>;
 };
 
@@ -35,5 +39,5 @@ export function needsResponseBodies(steps: unknown): boolean;
 export function resolveBreakingPoint(
   loadProfile: unknown,
   elapsedSeconds: unknown,
-): number;
+): number | null;
 export function thresholdsBreached(summary: unknown): boolean;

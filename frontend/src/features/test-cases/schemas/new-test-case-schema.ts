@@ -1,5 +1,10 @@
-import { loadModesByTestType } from '@/features/test-cases/lib/status';
-import type { TestType } from '@/features/test-cases/types/test-case';
+import {
+  defaultRunConfigurationValues,
+  executionSchema,
+  loadFieldsShape,
+  optionalNumericString,
+  refineRunConfiguration,
+} from '@/features/test-cases/schemas/run-configuration-schema';
 import { z } from 'zod';
 
 const TEST_TYPES = [
@@ -11,8 +16,6 @@ const TEST_TYPES = [
   'BREAKPOINT',
 ] as const;
 
-const TIME_UNITS = ['SECONDS', 'MINUTES', 'HOURS'] as const;
-const RESOURCE_PROFILES = ['SMALL', 'MEDIUM', 'LARGE', 'CUSTOM'] as const;
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE'] as const;
 const AUTH_KINDS = [
   'NONE',
@@ -21,22 +24,6 @@ const AUTH_KINDS = [
   'API_KEY_HEADER',
   'LOGIN_FLOW',
 ] as const;
-
-// Numeric inputs stay strings in the form and are converted by the mapper —
-// this keeps zod's input and output types identical, which react-hook-form needs.
-const numericString = (message = 'Must be a number') =>
-  z
-    .string()
-    .min(1, 'Required')
-    .refine((value) => Number.isFinite(Number(value)), message);
-
-const optionalNumericString = z
-  .string()
-  .optional()
-  .refine(
-    (value) => !value || value.trim() === '' || Number.isFinite(Number(value)),
-    'Must be a number',
-  );
 
 const rateString = z
   .string()
@@ -95,32 +82,8 @@ export const newTestCaseFormSchema = z
       applyAs: z.enum(['BEARER_TOKEN', 'HEADER']),
     }),
 
-    // PRESET lets the backend derive the k6-recommended shape for the chosen
-    // test type; MANUAL keeps the hand-authored stages below.
-    loadSource: z.enum(['PRESET', 'MANUAL']),
-    preset: z.object({
-      peakRate: numericString(),
-      duration: numericString(),
-      timeUnit: z.enum(TIME_UNITS),
-    }),
-    loadMode: z.enum(['CONSTANT', 'RAMP']),
-    constant: z.object({
-      targetRate: numericString(),
-      duration: numericString(),
-      timeUnit: z.enum(TIME_UNITS),
-    }),
-    ramp: z.object({
-      initialRate: numericString(),
-      timeUnit: z.enum(TIME_UNITS),
-      stages: z
-        .array(
-          z.object({
-            target: numericString(),
-            duration: numericString(),
-          }),
-        )
-        .min(1, 'Add at least one stage'),
-    }),
+    // The default load and container of the case's runs.
+    ...loadFieldsShape,
 
     thresholds: z.object({
       maxErrorRate: rateString,
@@ -130,28 +93,12 @@ export const newTestCaseFormSchema = z
       abortOnFail: z.boolean(),
     }),
 
-    execution: z.object({
-      resourceProfile: z.enum(RESOURCE_PROFILES),
-      timeoutSeconds: numericString(),
-      cpuMillicores: optionalNumericString,
-      memoryMb: optionalNumericString,
-    }),
+    execution: executionSchema,
 
     steps: z.array(stepSchema).min(1, 'Add at least one step'),
   })
   .superRefine((values, ctx) => {
-    // Mirrors backend assertCompatibleLoadProfile so an incompatible pairing is
-    // caught here instead of coming back as a 422.
-    const allowed = loadModesByTestType[values.testType as TestType];
-    // A derived profile is compatible by construction, so this only applies to
-    // hand-authored load.
-    if (values.loadSource === 'MANUAL' && !allowed.includes(values.loadMode)) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['loadMode'],
-        message: `${values.testType} test cases only support ${allowed.join(' or ')} load.`,
-      });
-    }
+    refineRunConfiguration(values, values.testType, ctx);
 
     const requireSecretRef = (
       ref: { provider?: string; key?: string },
@@ -225,23 +172,6 @@ export const newTestCaseFormSchema = z
       }
     }
 
-    if (values.execution.resourceProfile === 'CUSTOM') {
-      if (!values.execution.cpuMillicores?.trim()) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['execution', 'cpuMillicores'],
-          message: 'Required for CUSTOM profile',
-        });
-      }
-      if (!values.execution.memoryMb?.trim()) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['execution', 'memoryMb'],
-          message: 'Required for CUSTOM profile',
-        });
-      }
-    }
-
     values.steps.forEach((step, stepIndex) => {
       if (step.bodyJson?.trim()) {
         try {
@@ -305,15 +235,7 @@ export const defaultNewTestCaseValues: NewTestCaseFormValues = {
     tokenExtractionPath: '',
     applyAs: 'BEARER_TOKEN',
   },
-  loadSource: 'PRESET',
-  preset: { peakRate: '50', duration: '5', timeUnit: 'MINUTES' },
-  loadMode: 'CONSTANT',
-  constant: { targetRate: '10', duration: '30', timeUnit: 'SECONDS' },
-  ramp: {
-    initialRate: '0',
-    timeUnit: 'SECONDS',
-    stages: [{ target: '50', duration: '30' }],
-  },
+  ...defaultRunConfigurationValues,
   thresholds: {
     maxErrorRate: '0.05',
     minCheckSuccessRate: '0.95',
@@ -322,10 +244,8 @@ export const defaultNewTestCaseValues: NewTestCaseFormValues = {
     abortOnFail: true,
   },
   execution: {
-    resourceProfile: 'SMALL',
+    ...defaultRunConfigurationValues.execution,
     timeoutSeconds: '300',
-    cpuMillicores: '',
-    memoryMb: '',
   },
   steps: [
     {
@@ -337,4 +257,4 @@ export const defaultNewTestCaseValues: NewTestCaseFormValues = {
   ],
 };
 
-export { TEST_TYPES, TIME_UNITS, RESOURCE_PROFILES, HTTP_METHODS, AUTH_KINDS };
+export { TEST_TYPES, HTTP_METHODS, AUTH_KINDS };

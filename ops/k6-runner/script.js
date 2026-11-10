@@ -89,6 +89,7 @@ export function handleSummary(data) {
         scenario: scenario.executor,
         configuredRate: scenario.rate ?? scenario.startRate ?? null,
         configuredTimeUnit: scenario.timeUnit ?? null,
+        configuredVus: scenario.vus ?? scenario.startVUs ?? null,
         elapsedSeconds,
         aborted,
         // Where the system gave out — the number a BREAKPOINT test exists for.

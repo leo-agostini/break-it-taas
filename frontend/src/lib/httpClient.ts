@@ -1,61 +1,14 @@
 import { API_SERVER_URL, API_URL } from '@/lib/env';
-import axios, {
-  type AxiosError,
-  type AxiosInstance,
-  type AxiosRequestConfig,
-} from 'axios';
+import { reportApiError } from '@/lib/observability';
+import axios from 'axios';
 
-type RetriableRequestConfig = AxiosRequestConfig & {
-  _retry?: boolean;
-};
-
-function attachRefreshInterceptor(
-  httpClient: AxiosInstance,
-  refreshClient: AxiosInstance,
-) {
-  let inFlightRefresh: Promise<void> | null = null;
-
-  httpClient.interceptors.response.use(
-    (response) => response,
-    async (error: AxiosError) => {
-      const status = error.response?.status;
-      const originalConfig = error.config as RetriableRequestConfig | undefined;
-
-      if (status !== 401 || !originalConfig || originalConfig._retry) {
-        throw error;
-      }
-
-      originalConfig._retry = true;
-
-      if (!inFlightRefresh) {
-        inFlightRefresh = refreshClient
-          .post('/auth/refresh')
-          .then(() => undefined)
-          .finally(() => {
-            inFlightRefresh = null;
-          });
-      }
-
-      try {
-        await inFlightRefresh;
-      } catch {
-        throw error;
-      }
-
-      return httpClient.request(originalConfig);
-    },
-  );
-}
+/*
+ * Auth is a session cookie set by the API (ADR-008). There is no token to
+ * refresh: a 401 means the session is gone, and the caller sends the user to
+ * /login.
+ */
 
 export const publicHttpClient = axios.create({
-  baseURL: API_URL,
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-const refreshHttpClient = axios.create({
   baseURL: API_URL,
   withCredentials: true,
   headers: {
@@ -71,7 +24,14 @@ export const privateHttpClient = axios.create({
   },
 });
 
-attachRefreshInterceptor(privateHttpClient, refreshHttpClient);
+// Browser clients only: reportApiError is a no-op until Faro is initialized,
+// which never happens on the server.
+for (const client of [publicHttpClient, privateHttpClient]) {
+  client.interceptors.response.use(undefined, (error: unknown) => {
+    reportApiError(error);
+    return Promise.reject(error);
+  });
+}
 
 function resolveServerBaseUrl(request: Request) {
   const requestUrl = new URL(request.url);
@@ -81,7 +41,11 @@ function resolveServerBaseUrl(request: Request) {
     : `${requestUrl.origin}${API_SERVER_URL}`;
 }
 
-export function createServerPublicHttpClient(request: Request) {
+/**
+ * For loaders: calls the API server-side, forwarding the browser's cookies so
+ * the request runs in the user's session.
+ */
+function createServerHttpClient(request: Request) {
   const cookieHeader = request.headers.get('cookie') ?? '';
 
   return axios.create({
@@ -95,40 +59,9 @@ export function createServerPublicHttpClient(request: Request) {
 }
 
 export function createServerPrivateHttpClient(request: Request) {
-  const cookieHeader = request.headers.get('cookie') ?? '';
-  const resolvedBaseUrl = resolveServerBaseUrl(request);
-
-  const serverRefreshClient = axios.create({
-    baseURL: resolvedBaseUrl,
-    withCredentials: true,
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookieHeader,
-    },
-  });
-
-  const serverPrivateClient = axios.create({
-    baseURL: resolvedBaseUrl,
-    withCredentials: true,
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookieHeader,
-    },
-  });
-
-  attachRefreshInterceptor(serverPrivateClient, serverRefreshClient);
-  return serverPrivateClient;
+  return createServerHttpClient(request);
 }
 
 export function createServerCheckHttpClient(request: Request) {
-  const cookieHeader = request.headers.get('cookie') ?? '';
-
-  return axios.create({
-    baseURL: resolveServerBaseUrl(request),
-    withCredentials: true,
-    headers: {
-      'Content-Type': 'application/json',
-      Cookie: cookieHeader,
-    },
-  });
+  return createServerHttpClient(request);
 }

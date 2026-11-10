@@ -1,0 +1,1439 @@
+{
+  "uid": "breakit-frontend",
+  "title": "Frontend",
+  "description": "Browser telemetry from Grafana Faro: sessions, page views, exceptions, console logs, API errors and Core Web Vitals.",
+  "tags": [
+    "breakit",
+    "frontend",
+    "faro"
+  ],
+  "timezone": "browser",
+  "refresh": "30s",
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "search",
+        "label": "Search logs",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Usage and errors \u2014 selected range",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Sessions",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(sum by (session_id) (count_over_time({source=\"faro\", app_name=\"breakit-frontend\"} | logfmt session_id [$__range])))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ],
+      "description": "Distinct Faro sessions with any activity in the range. Sessions persist across reloads and end after 15 minutes of inactivity."
+    },
+    {
+      "type": "stat",
+      "title": "Page views",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"event\"} | logfmt event_name | event_name=\"page_view\" [$__range])) or vector(0)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ],
+      "description": "page_view events, sent by the frontend on the first render and on every client-side route change (useTrackPageViews)."
+    },
+    {
+      "type": "stat",
+      "title": "Exceptions",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"exception\"} [$__range])) or vector(0)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ],
+      "description": "Uncaught errors, unhandled promise rejections and errors caught by the root ErrorBoundary."
+    },
+    {
+      "type": "stat",
+      "title": "Sessions with errors",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "noValue": "0",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.02
+              },
+              {
+                "color": "red",
+                "value": 0.1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(count(sum by (session_id) (count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"exception\"} | logfmt session_id [$__range]))) or vector(0)) / count(sum by (session_id) (count_over_time({source=\"faro\", app_name=\"breakit-frontend\"} | logfmt session_id [$__range])))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ],
+      "description": "Share of sessions that hit at least one exception: the frontend error rate as users experience it."
+    },
+    {
+      "type": "stat",
+      "title": "Console errors",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"log\"} | logfmt level | level=\"error\" [$__range])) or vector(0)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "API errors",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"event\"} | logfmt event_name | event_name=\"api_error\" [$__range])) or vector(0)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ],
+      "description": "API calls from the browser that got a 5xx or no response at all (network error, API down). 4xx responses are expected outcomes and not counted."
+    },
+    {
+      "type": "row",
+      "title": "Core Web Vitals \u2014 p75 over the range",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "LCP",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "noValue": "0",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2500
+              },
+              {
+                "color": "red",
+                "value": 4000
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app_name=\"breakit-frontend\", kind=\"measurement\"} | logfmt type, lcp | type=\"web-vitals\" | unwrap lcp | __error__=\"\" [$__range]) by (app_name)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ],
+      "description": "Largest Contentful Paint. Good below 2.5s."
+    },
+    {
+      "type": "stat",
+      "title": "INP",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "noValue": "0",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 200
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app_name=\"breakit-frontend\", kind=\"measurement\"} | logfmt type, inp | type=\"web-vitals\" | unwrap inp | __error__=\"\" [$__range]) by (app_name)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ],
+      "description": "Interaction to Next Paint. Good below 200ms."
+    },
+    {
+      "type": "stat",
+      "title": "CLS",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.25
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app_name=\"breakit-frontend\", kind=\"measurement\"} | logfmt type, cls | type=\"web-vitals\" | unwrap cls | __error__=\"\" [$__range]) by (app_name)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ],
+      "description": "Cumulative Layout Shift. Good below 0.1."
+    },
+    {
+      "type": "stat",
+      "title": "FCP",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "noValue": "0",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1800
+              },
+              {
+                "color": "red",
+                "value": 3000
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app_name=\"breakit-frontend\", kind=\"measurement\"} | logfmt type, fcp | type=\"web-vitals\" | unwrap fcp | __error__=\"\" [$__range]) by (app_name)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ],
+      "description": "First Contentful Paint. Good below 1.8s."
+    },
+    {
+      "type": "stat",
+      "title": "TTFB",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "noValue": "0",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 800
+              },
+              {
+                "color": "red",
+                "value": 1800
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app_name=\"breakit-frontend\", kind=\"measurement\"} | logfmt type, ttfb | type=\"web-vitals\" | unwrap ttfb | __error__=\"\" [$__range]) by (app_name)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ],
+      "description": "Time to First Byte, which includes the SSR render. Good below 800ms."
+    },
+    {
+      "type": "stat",
+      "title": "Active sessions (5m)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(sum by (session_id) (count_over_time({source=\"faro\", app_name=\"breakit-frontend\"} | logfmt session_id [5m])))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Trends",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Errors over time",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 11
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "lineWidth": 1,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"exception\"} [$__auto]))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "exceptions",
+          "queryType": "range"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"log\"} | logfmt level | level=\"error\" [$__auto]))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "console errors",
+          "queryType": "range"
+        },
+        {
+          "refId": "C",
+          "expr": "sum(count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"event\"} | logfmt event_name | event_name=\"api_error\" [$__auto]))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "API errors",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Sessions and page views",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 11
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "lineWidth": 1
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(sum by (session_id) (count_over_time({source=\"faro\", app_name=\"breakit-frontend\"} | logfmt session_id [$__auto])))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "sessions",
+          "queryType": "range"
+        },
+        {
+          "refId": "B",
+          "expr": "sum(count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"event\"} | logfmt event_name | event_name=\"page_view\" [$__auto]))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "page views",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Web vitals p75 (ms)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "lineWidth": 1
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app_name=\"breakit-frontend\", kind=\"measurement\"} | logfmt type, lcp | type=\"web-vitals\" | unwrap lcp | __error__=\"\" [$__auto]) by (app_name)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "LCP",
+          "queryType": "range"
+        },
+        {
+          "refId": "B",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app_name=\"breakit-frontend\", kind=\"measurement\"} | logfmt type, fcp | type=\"web-vitals\" | unwrap fcp | __error__=\"\" [$__auto]) by (app_name)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "FCP",
+          "queryType": "range"
+        },
+        {
+          "refId": "C",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app_name=\"breakit-frontend\", kind=\"measurement\"} | logfmt type, ttfb | type=\"web-vitals\" | unwrap ttfb | __error__=\"\" [$__auto]) by (app_name)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "TTFB",
+          "queryType": "range"
+        },
+        {
+          "refId": "D",
+          "expr": "quantile_over_time(0.75, {source=\"faro\", app_name=\"breakit-frontend\", kind=\"measurement\"} | logfmt type, inp | type=\"web-vitals\" | unwrap inp | __error__=\"\" [$__auto]) by (app_name)",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "INP",
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Top exceptions",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (type, value) (count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"exception\"} | logfmt type, value [$__range])))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "type": "Type",
+              "value": "Message",
+              "Value #A": "Count"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Count",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Errors by page",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 27
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (page_url) (count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"exception\"} | logfmt page_url [$__range])))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "page_url": "Page",
+              "Value #A": "Exceptions"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Exceptions",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "piechart",
+      "title": "Sessions by browser",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 27
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "pieType": "donut",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "value"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count by (browser_name) (sum by (session_id, browser_name) (count_over_time({source=\"faro\", app_name=\"breakit-frontend\"} | logfmt session_id, browser_name [$__range])))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "legendFormat": "{{browser_name}}",
+          "instant": true,
+          "range": false,
+          "queryType": "instant"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Most viewed pages",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 27
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "topk(10, sum by (event_data_path) (count_over_time({source=\"faro\", app_name=\"breakit-frontend\", kind=\"event\"} | logfmt event_name, event_data_path | event_name=\"page_view\" [$__range])))",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "instant": true,
+          "range": false,
+          "queryType": "instant",
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "event_data_path": "Path",
+              "Value #A": "Views"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": {
+            "sort": [
+              {
+                "field": "Views",
+                "desc": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Logs",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "panels": []
+    },
+    {
+      "type": "logs",
+      "title": "Exceptions (with stack traces)",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 0,
+        "y": 36
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{source=\"faro\", app_name=\"breakit-frontend\", kind=\"exception\"}",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "API errors",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 12,
+        "x": 12,
+        "y": 36
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{source=\"faro\", app_name=\"breakit-frontend\", kind=\"event\"} |= \"event_name=api_error\"",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Console logs",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{source=\"faro\", app_name=\"breakit-frontend\", kind=\"log\"} |= \"$search\"",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range"
+        }
+      ],
+      "description": "Browser console output captured by Faro: console.error, warn and info (log/debug/trace are not collected)."
+    },
+    {
+      "type": "logs",
+      "title": "All browser events",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 60
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{source=\"faro\", app_name=\"breakit-frontend\"} |= \"$search\"",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "queryType": "range"
+        }
+      ],
+      "description": "Everything Faro sent: events, measurements, logs and exceptions. Filter a single session by searching its session_id."
+    }
+  ]
+}

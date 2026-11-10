@@ -31,3 +31,12 @@ Use Postgres outbox as the single durable queue for test-run dispatch. A dedicat
 - Worker polls every 5 seconds and dispatches `TEST_RUN_REQUESTED` events.
 - Transient enqueue failures are retried; terminal failures are marked `FAILED`.
 - Redis is removed from backend runtime and compose stack for this flow.
+
+## Observability
+The worker is the one ace command booted with OpenTelemetry (`bin/console.ts`, service `breakit-worker`). It is off unless `OTEL_SDK_DISABLED=false`, which `ops/dev-up.sh` sets with `OBSERVABILITY=1`.
+- Traces: one span per dispatched event (`outbox dispatch <type>`), with the handler's queries and Kubernetes API call as children. Retried or parked events mark the span as an error.
+- Metrics (`app/modules/outbox/services/outbox_telemetry.ts`): `breakit_outbox_events_processed_total{type,result}`, `breakit_outbox_dispatch_duration_seconds`, and `breakit_outbox_cycles_total{result}`.
+- Logs: retries (warn) and parked events (error) carry the event id and type, and go to Loki over OTLP through pino's OpenTelemetry transport (`config/logger.ts`).
+- Backlog: `breakit_outbox_events{status}` and `breakit_outbox_oldest_age_seconds{status}` come from postgres-exporter reading the table, not from the worker, so they stay accurate while it is down.
+
+See the Outbox Worker dashboard and `docs/05-operations/observability.md`.

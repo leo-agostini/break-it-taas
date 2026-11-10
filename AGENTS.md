@@ -6,12 +6,12 @@ This file guides Codex (and other AI agents reading this repo) when working in *
 
 Break It TaaS is a test-as-a-service application for defining load test cases, dispatching Kubernetes runner jobs, hitting a target API, and collecting signed runner callbacks/results. It's an npm workspace:
 
-- `backend/` — Bun + Elysia API and outbox worker, Clean Architecture (`domain/` → `application/` → `infra/`). See [docs/02-architecture/backend-architecture.md](docs/02-architecture/backend-architecture.md).
+- `backend/` — AdonisJS v7 (Node 24) API and outbox worker, a modular monolith in MVC style: `app/modules/<module>/` with controllers, Lucid models, services, Vine validators, and a framework-free `domain/` core. See [docs/02-architecture/backend-architecture.md](docs/02-architecture/backend-architecture.md) and [ADR-007](docs/03-decisions/ADR-007-adonis-modular-monolith.md).
 - `frontend/` — React 19 + React Router 7 + Vite, feature-based/vertical-slice architecture, SWR + Jotai, client-side only. See [docs/02-architecture/frontend-architecture.md](docs/02-architecture/frontend-architecture.md).
 - `ops/` — local environment scripts. `./ops/dev-up.sh` (or `make up`) is the single entrypoint: it creates the kind cluster `taas-dev` (context `kind-taas-dev`), builds and loads the k6 runner image, brings up the Docker Compose stack, and runs the outbox worker on the host.
 - `docs/` — formal documentation trail (context, product, architecture, decisions, quality, operations). See [docs/README.md](docs/README.md) for the index. Most docs are written in Portuguese (this is an academic project deliverable) — keep new entries in `docs/00-context` through `docs/05-operations` in Portuguese to stay consistent.
 
-Read the two architecture documents above before making non-trivial changes to either app — they describe the layering and the dependency-direction rules (top-down, no cycles) that both codebases must follow.
+Read the two architecture documents above before making non-trivial changes to either app — they describe the module boundaries and the dependency-direction rules (no cycles; backend `domain/` folders never import the framework) that both codebases must follow.
 
 ## Where things run
 
@@ -29,12 +29,13 @@ never `localhost`. See [ADR-006](docs/03-decisions/ADR-006-compose-first-local-e
 Run from the repo root unless noted:
 
 - `npm install` — install all workspaces
-- `./ops/dev-up.sh` (or `make up`) — start the whole environment and run the worker
+- `./ops/dev-up.sh` (or `make up`) — start the whole environment and run the worker; `OBSERVABILITY=1` (or `make up-obs`) adds Grafana on :3002 plus API/browser telemetry (see [ADR-009](docs/03-decisions/ADR-009-observability-collected-outside-cluster.md))
 - `./ops/dev-down.sh` (or `make down`) — stop it; `--cluster` also deletes the cluster
 - `npm run smoke` — end-to-end check, requires `dev-up.sh` running
 - `npm run dev` — run backend + frontend in parallel (turbo)
 - `npm run lint` / `npm run format` / `npm run typecheck` — across all workspaces (biome + tsc)
-- `npm --workspace backend run test` — backend unit/use-case tests (Bun test runner)
+- `npm --workspace backend run test` — backend `unit` (no DB) and `functional` (Postgres `app_test`) Japa suites; `test:unit` runs only the former
+- `npm --workspace backend run worker:dev` — run the outbox worker (`node ace outbox:work`); the backend needs Node 24 (`nvm use`)
 - `npm --workspace backend run migrate:latest` — run DB migrations
 - `npm --workspace frontend run typecheck` — includes `react-router typegen`
 

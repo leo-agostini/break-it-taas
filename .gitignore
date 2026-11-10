@@ -69,6 +69,8 @@ web_modules/
 .env
 .env.*
 !.env.example
+# Non-secret overrides for `node ace test` (points at the app_test database).
+!backend/.env.test
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
@@ -145,3 +147,6 @@ vite.config.ts.timestamp-*
 frontend/build/
 frontend/.react-router/
 backend/dist/
+
+# Telemetry-reader token and kubeconfig, written by ops/observability/write-kubeconfig.sh
+ops/observability/.kube/

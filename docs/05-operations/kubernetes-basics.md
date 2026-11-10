@@ -87,7 +87,7 @@ A **secret** stores sensitive config values as Kubernetes objects.
 
 Examples:
 - DB URL
-- JWT secret
+- `APP_KEY` (criptografia do cookie de sessão)
 - runner shared secret
 
 ## RBAC

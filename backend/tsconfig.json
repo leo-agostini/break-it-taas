@@ -1,15 +1,9 @@
 {
-  "extends": "../tsconfig.base.json",
+  "extends": "@adonisjs/tsconfig/tsconfig.app.json",
   "compilerOptions": {
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "target": "ES2022",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"]
-    },
-    "types": ["bun-types", "node"],
-    "rootDir": "."
+    "rootDir": "./",
+    "outDir": "./build",
+    "strict": true
   },
-  "include": ["src", "knexfile.ts"]
+  "exclude": ["./src/**", "./build/**", "./node_modules/**"]
 }

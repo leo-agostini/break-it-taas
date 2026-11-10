@@ -15,7 +15,11 @@ export type AuthStrategyKind =
   | 'API_KEY_HEADER'
   | 'LOGIN_FLOW';
 
-export type LoadMode = 'CONSTANT' | 'RAMP';
+/**
+ * CONSTANT and RAMP drive a request arrival rate (open model); CONSTANT_VUS and
+ * RAMPING_VUS drive a number of concurrent virtual users (closed model).
+ */
+export type LoadMode = 'CONSTANT' | 'RAMP' | 'CONSTANT_VUS' | 'RAMPING_VUS';
 
 export type TimeUnit = 'SECONDS' | 'MINUTES' | 'HOURS';
 
@@ -73,14 +77,39 @@ export interface Stage {
   duration: number;
 }
 
+/** VU pool an arrival-rate run draws from; the runner estimates one when unset. */
+export interface VuPool {
+  preAllocated: number;
+  max: number;
+}
+
 export type LoadProfile =
   | {
       mode: 'CONSTANT';
-      config: { targetRate: number; duration: number; timeUnit: TimeUnit };
+      config: {
+        targetRate: number;
+        duration: number;
+        timeUnit: TimeUnit;
+        vus?: VuPool;
+      };
     }
   | {
       mode: 'RAMP';
-      config: { initialRate: number; timeUnit: TimeUnit; stages: Stage[] };
+      config: {
+        initialRate: number;
+        timeUnit: TimeUnit;
+        stages: Stage[];
+        vus?: VuPool;
+      };
+    }
+  | {
+      mode: 'CONSTANT_VUS';
+      config: { vus: number; duration: number; timeUnit: TimeUnit };
+    }
+  | {
+      // Stage targets are VU counts here, not rates.
+      mode: 'RAMPING_VUS';
+      config: { startVus: number; timeUnit: TimeUnit; stages: Stage[] };
     };
 
 export interface ThresholdPolicy {
@@ -108,8 +137,10 @@ export interface TestCase {
   testType: TestType;
   targetSystem: { baseUrl: string; environment: string };
   authStrategy: AuthStrategy;
+  /** Default load for runs that do not override it. */
   loadProfile: LoadProfile;
   thresholdPolicy: ThresholdPolicy;
+  /** Default runner container for runs that do not override it. */
   executionPolicy: ExecutionPolicy;
   steps: Step[];
 }
@@ -118,9 +149,13 @@ export interface TestCaseSummary extends TestCase {
   runCount: number;
 }
 
-/** Knobs the backend turns into the load shape prescribed for a test type. */
+/**
+ * Knobs the backend turns into the load shape prescribed for a test type. The
+ * peak is exactly one of an arrival rate or a number of virtual users.
+ */
 export interface LoadPreset {
-  peakRate: number;
+  peakRate?: number;
+  peakVus?: number;
   duration: number;
   timeUnit: TimeUnit;
 }

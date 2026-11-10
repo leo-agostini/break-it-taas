@@ -3,8 +3,8 @@
 ## Repositório local (Husky)
 
 - `pre-commit`
-  - `bun run lint`
-  - `bun run typecheck`
+  - `npm run lint`
+  - `npm run typecheck`
 - `commit-msg`
   - `commitlint`
 
@@ -15,7 +15,8 @@ Workflow: `.github/workflows/ci.yml`
 Jobs:
 
 1. `lint-and-typecheck`
-   - install dependencies
+   - Node 24 (`.nvmrc`)
+   - install dependencies (`npm ci`)
    - lint
    - typecheck
    - build
@@ -24,4 +25,4 @@ Jobs:
 
 ## Observação importante
 
-Neste momento, o gate de testes automatizados não está habilitado por decisão do autor, pois a etapa de modelagem de domínio ainda está em evolução.
+Neste momento, o gate de testes automatizados não está habilitado no CI por decisão do autor, pois a etapa de modelagem de domínio ainda está em evolução. Localmente, `npm --workspace backend run test` executa as suítes `unit` (sem banco) e `functional` (Postgres do Compose, banco `app_test`).
