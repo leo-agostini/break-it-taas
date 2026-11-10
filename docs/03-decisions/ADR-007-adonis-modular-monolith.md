@@ -107,7 +107,8 @@ de domínio que de fato importam e que hoje são testáveis sem banco.
 - O schema do banco não mudou: as migrations Lucid são portas 1:1 das Knex
   (verificado com `pg_dump --schema-only`). Bancos já migrados pelo Knex são
   adotados por `node ace db:adopt-knex`, executado automaticamente pelo serviço
-  `migrate` do Compose.
+  `migrate` do Compose. Esse comando foi removido depois: um banco migrado só
+  pelo Knex e nunca adotado precisa ser recriado.
 - `GET /docs` (Swagger do Elysia) deixou de existir; Adonis não tem gerador
   OpenAPI oficial. Reintroduzir documentação OpenAPI é trabalho futuro.
 - A regra `useImportType` do Biome está desligada no backend: converter imports

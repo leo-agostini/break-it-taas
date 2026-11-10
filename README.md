@@ -278,7 +278,7 @@ Backend `backend/package.json`:
 | `npm --workspace backend run build` | Compiles to `build/` with `node ace build`. | Release or CI validation. | Dependencies installed. |
 | `npm --workspace backend run start` | Runs the built API from `build/`. | Production-style local API run. | Run `build` first. |
 | `npm --workspace backend run worker:start` | Runs the built worker from `build/`. | Production-style local worker run. | Run `build` first. |
-| `npm --workspace backend run migrate:latest` | Applies pending Lucid migrations (`node ace migration:run`). A database first migrated by the old Knex runner needs `node ace db:adopt-knex` once; Compose's `migrate` service does this automatically. | Before using a fresh or changed database. | Correct `DATABASE_URL`. |
+| `npm --workspace backend run migrate:latest` | Applies pending Lucid migrations (`node ace migration:run`). | Before using a fresh or changed database. | Correct `DATABASE_URL`. |
 | `npm --workspace backend run migrate:rollback` | Rolls back the latest migration batch. | Local schema rollback. | Correct `DATABASE_URL`; use carefully. |
 | `npm --workspace backend run lint` | Runs Biome checks for backend. | Backend quality gate. | Dependencies installed. |
 | `npm --workspace backend run format` | Formats backend files. | Formatting fixes. | Writes files. |

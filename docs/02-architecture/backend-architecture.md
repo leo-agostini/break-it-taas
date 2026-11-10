@@ -14,7 +14,7 @@ backend/
   start/routes.ts        apenas importa o routes.ts de cada módulo
   config/                app, database (pg), session, auth, cors, hash (argon2), bodyparser
   providers/app_provider.ts   liga portas a implementações (TestRunQueue → Kubernetes)
-  commands/              comandos Ace: outbox:work (worker), db:adopt-knex
+  commands/              comandos Ace: outbox:work (worker)
   database/migrations/   migrations Lucid
   app/
     exceptions/handler.ts     converte qualquer exceção em resposta HTTP

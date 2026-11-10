@@ -37,15 +37,16 @@ groups:
         annotations:
           summary: "API 5xx rate above 5%"
 
-      # min:2 max:10 in knex.ts — sustained pending acquires means the pool is
-      # the bottleneck, not Postgres itself.
+      # Lucid's pool (Knex underneath; config/database.ts keeps the default
+      # min:2 max:10) — sustained pending acquires means the pool is the
+      # bottleneck, not Postgres itself.
       - alert: DbPoolSaturated
         expr: db_client_connection_pending_requests > 0
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Knex connection pool has sustained pending acquires"
+          summary: "Database connection pool has sustained pending acquires"
 
   - name: breakit-collector
     rules:
